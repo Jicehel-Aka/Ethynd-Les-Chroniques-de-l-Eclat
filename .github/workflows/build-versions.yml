@@ -1,0 +1,259 @@
+name: Générer toutes les versions (Web, HTML, Éditeur & Gamebuino AKA)
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_web:
+        description: "Compiler l'Application Web complète (SPA / Hébergement statique)"
+        required: false
+        default: true
+        type: boolean
+      build_html:
+        description: "Générer le Jeu HTML5 autonome & l'Éditeur de niveaux HTML"
+        required: false
+        default: true
+        type: boolean
+      build_aka:
+        description: "Générer le Pack MicroSD RGB565 & compiler le Firmware ESP32-S3 Gamebuino AKA"
+        required: false
+        default: true
+        type: boolean
+      publish_release:
+        description: "Publier automatiquement une GitHub Release avec toutes les versions"
+        required: false
+        default: false
+        type: boolean
+      release_tag:
+        description: "Tag de la GitHub Release si publication activée (ex: v1.1.0)"
+        required: false
+        default: ""
+        type: string
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ethynd-build-versions-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verification-qualite:
+    name: "Audit TypeScript & Tests des 5 Actes"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupération du dépôt
+        uses: actions/checkout@v4
+
+      - name: Configuration de Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Installation des dépendances
+        run: npm ci
+
+      - name: Vérification du typage TypeScript
+        run: npm run lint
+
+      - name: Suite de tests automatisés (11 cartes, portails, gardes, boss & sauvegardes)
+        run: npm run verify:world
+
+  edition-html-autonome:
+    name: "Éditions HTML5 Autonomes (Jeu + Éditeur)"
+    needs: verification-qualite
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_html == true }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupération du dépôt
+        uses: actions/checkout@v4
+
+      - name: Configuration de Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Installation des dépendances
+        run: npm ci
+
+      - name: Génération de simulation_ethynd.html & editeur_niveaux.html
+        run: npm run build:html
+
+      - name: Publication de l'artefact — Jeu HTML5 Autonome (FR & EN)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ethynd-1-jeu-html-autonome
+          path: |
+            release-builds/html-autonome/simulation_ethynd.html
+            release-builds/html-autonome/simulation_ethynd_en.html
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publication de l'artefact — Éditeur de Niveaux HTML5 Autonome
+        uses: actions/upload-artifact@v4
+        with:
+          name: ethynd-2-editeur-niveaux-html
+          path: release-builds/html-autonome/editeur_niveaux.html
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publication de l'archive groupée HTML5 (.zip)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ethynd-html-pack-zip
+          path: release-builds/ethynd-html-autonome-pack.zip
+          if-no-files-found: error
+          retention-days: 30
+
+  edition-gamebuino-aka:
+    name: "Édition Console Gamebuino AKA (MicroSD + Firmware ESP32-S3)"
+    needs: verification-qualite
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_aka == true }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupération du dépôt
+        uses: actions/checkout@v4
+
+      - name: Configuration de Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Configuration de Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache PlatformIO ( Chaîne de compilation ESP32-S3 )
+        uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: ${{ runner.os }}-pio-aka-${{ hashFiles('gamebuino_aka/platformio.ini') }}
+          restore-keys: |
+            ${{ runner.os }}-pio-aka-
+
+      - name: Installation de PlatformIO Core
+        run: pip install --upgrade platformio
+
+      - name: Compilation du Firmware natif ESP32-S3 (Gamebuino AKA)
+        run: pio run -d gamebuino_aka
+
+      - name: Vérification de l'outil Python autonome pack_aka_sd.py
+        run: python3 gamebuino_aka/tools/pack_aka_sd.py
+
+      - name: Installation des dépendances Node.js
+        run: npm ci
+
+      - name: Assemblage du Pack Complet Gamebuino AKA (WORLD.BIN + TILESET.565 + SPRITES.565 + firmware.bin)
+        run: npm run build:aka
+
+      - name: Publication de l'artefact — Pack Console Gamebuino AKA Complet
+        uses: actions/upload-artifact@v4
+        with:
+          name: ethynd-3-console-gamebuino-aka
+          path: |
+            release-builds/ethynd-gamebuino-aka-pack.zip
+            gamebuino_aka/.pio/build/gamebuino_aka_esp32s3/firmware.bin
+            gamebuino_aka/.pio/build/gamebuino_aka_esp32s3/firmware.elf
+          if-no-files-found: error
+          retention-days: 30
+
+  edition-web-spa:
+    name: "Édition Application Web Complète (SPA / Serveur Statique)"
+    needs: verification-qualite
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_web == true }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupération du dépôt
+        uses: actions/checkout@v4
+
+      - name: Configuration de Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Installation des dépendances
+        run: npm ci
+
+      - name: Compilation de l'Application Web SPA + ressources téléchargeables
+        run: npm run build:all
+
+      - name: Publication de l'artefact — Application Web Complète (.zip)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ethynd-4-application-web-spa
+          path: |
+            release-builds/ethynd-web-spa.zip
+            release-builds/LISEZMOI_VERSIONS.md
+            release-builds/BUILD_MANIFEST.json
+          if-no-files-found: error
+          retention-days: 30
+
+  synthese-et-publication:
+    name: "Récapitulatif & Publication GitHub Release"
+    needs:
+      - verification-qualite
+      - edition-html-autonome
+      - edition-gamebuino-aka
+      - edition-web-spa
+    if: ${{ always() && needs.verification-qualite.result == 'success' && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Téléchargement de tous les artefacts générés
+        uses: actions/download-artifact@v4
+        with:
+          path: collected-artifacts
+
+      - name: Préparation du dossier de distribution & Résumé d'exécution
+        run: |
+          mkdir -p dist-release
+          find collected-artifacts -type f \( -name "*.zip" -o -name "*.html" -o -name "*.bin" -o -name "*.elf" -o -name "LISEZMOI_VERSIONS.md" -o -name "BUILD_MANIFEST.json" \) -exec cp -f {} dist-release/ \;
+
+          echo "## Versions d'Ethynd générées avec succès" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Fichier généré | Taille | SHA-256 |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| :--- | ---: | :--- |" >> "$GITHUB_STEP_SUMMARY"
+          for f in dist-release/*; do
+            [ -f "$f" ] || continue
+            fname=$(basename "$f")
+            fsize=$(du -h "$f" | cut -f1)
+            fhash=$(sha256sum "$f" | awk '{print substr($1,1,16)}')
+            echo "| \`$fname\` | $fsize | \`${fhash}…\` |" >> "$GITHUB_STEP_SUMMARY"
+          done
+
+      - name: Détermination du tag de Release
+        id: rel_meta
+        if: ${{ startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.publish_release == true) }}
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            TAG_NAME="${GITHUB_REF#refs/tags/}"
+          elif [[ -n "${{ inputs.release_tag }}" ]]; then
+            TAG_NAME="${{ inputs.release_tag }}"
+          else
+            TAG_NAME="v$(date +'%Y.%m.%d-%H%M')"
+          fi
+          echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Publication de la GitHub Release officielle
+        if: ${{ startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.publish_release == true) }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.rel_meta.outputs.tag_name }}
+          name: "Ethynd : Les Chroniques de l'Éclat — ${{ steps.rel_meta.outputs.tag_name }}"
+          body_path: dist-release/LISEZMOI_VERSIONS.md
+          files: |
+            dist-release/ethynd-web-spa.zip
+            dist-release/simulation_ethynd.html
+            dist-release/simulation_ethynd_en.html
+            dist-release/editeur_niveaux.html
+            dist-release/ethynd-html-autonome-pack.zip
+            dist-release/ethynd-gamebuino-aka-pack.zip
+            dist-release/firmware.bin
+            dist-release/BUILD_MANIFEST.json
+          fail_on_unmatched_files: false

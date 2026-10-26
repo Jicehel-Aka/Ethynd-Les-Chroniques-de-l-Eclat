@@ -17,25 +17,56 @@ import struct
 import zlib
 
 FLAG_BITS = {
-    "met_sage": 1 << 0,
-    "boss_grotte_defeated": 1 << 1,
-    "spoke_king": 1 << 2,
-    "boss_chateau_defeated": 1 << 3,
-    "boss_temple_defeated": 1 << 4,
-    "boss_crypte_defeated": 1 << 5,
-    "boss_citadelle_defeated": 1 << 6,
+    "talked_sage": 1 << 0,
+    "act1_done": 1 << 1,
+    "talked_roi": 1 << 2,
+    "act2_started": 1 << 3,
+    "talked_elowen": 1 << 4,
+    "act3_done": 1 << 5,
+    "act4_done": 1 << 6,
+    "boss_pyraxis": 1 << 7,
 }
 
 BOSS_BIT_IDX = {
-    "boss_grotte_defeated": 1,
-    "boss_chateau_defeated": 3,
-    "boss_temple_defeated": 4,
-    "boss_crypte_defeated": 5,
-    "boss_citadelle_defeated": 6,
+    "boss_morvath": 1,
+    "boss_malakor": 3,
+    "boss_leviathan": 5,
+    "boss_vorgath": 6,
+    "boss_pyraxis": 7,
 }
 
 AI_MAP = {"passive": 0, "wander": 1, "chase": 2, "ranged": 3, "boss": 4}
 DIR_MAP = {"bas": 0, "gauche": 1, "droite": 2, "haut": 3}
+SHOP_MAP = {"market": 1, "forge": 2, "alchemy": 3}
+MONSTER_KEYS = [
+    "chat",
+    "oiseau",
+    "poussin",
+    "chauve_souris",
+    "chauve_souris_givre",
+    "chauve_souris_vampire",
+    "slime_vert",
+    "slime_caverne",
+    "magma_vivant",
+    "squelette",
+    "garde_corrompu",
+    "chevalier_os",
+    "chevalier_dechu_elite",
+    "spectre_ombre",
+    "elementaire_eau",
+    "mage_eclipse",
+    "golem_rune",
+    "golem_obsidienne",
+    "vouivre_azur",
+    "vouivre_obsidienne",
+    "dragon_garde",
+    "reine_caverne",
+    "chevalier_dechu",
+    "leviathanis",
+    "archiliche_vorgath",
+    "dragon_rouge",
+    "pyraxis",
+]
 
 
 def build_world_bin(world: dict) -> bytes:
@@ -85,21 +116,26 @@ def build_world_bin(world: dict) -> bytes:
         out += struct.pack("<H", len(npcs))
         for n in npcs:
             blk = FLAG_BITS.get(n.get("blockUntilFlag", ""), 0)
+            ntype = 1 if n.get("type") == "roi" else 2 if n.get("type") == "gardien" else 3 if n.get("type") == "forgeron" else 6 if n.get("type") == "rodeuse" else 0
+            dlg_id = 1 if n.get("id") == "sage" else 2 if n.get("id") == "roi" else 3 if n.get("id") == "elowen" else 0
+            shop_id = SHOP_MAP.get(n.get("shop", ""), 0)
             out += struct.pack(
                 "<BBhhHBB",
-                0, DIR_MAP.get(n.get("dir", "bas"), 0),
-                int(n["x"]), int(n["y"]), blk, 0, 0
+                ntype, DIR_MAP.get(n.get("dir", "bas"), 0),
+                int(n["x"]), int(n["y"]), blk, dlg_id, shop_id
             )
 
         spawns = m.get("spawns", [])
         out += struct.pack("<H", len(spawns))
         for sp in spawns:
+            m_type = sp.get("type", "")
+            m_idx = MONSTER_KEYS.index(m_type) if m_type in MONSTER_KEYS else 0
             ai_k = AI_MAP.get(sp.get("ai", "chase"), 2)
             sz = 48 if ai_k == 4 else 32
             b_bit = BOSS_BIT_IDX.get(sp.get("bossId", ""), 0)
             out += struct.pack(
                 "<BBhhHHHHBB",
-                0, ai_k, int(sp["x"]), int(sp["y"]),
+                m_idx, ai_k, int(sp["x"]), int(sp["y"]),
                 int(sp["hp"]), int(sp["atk"]), int(sp["xp"]), int(sp["gold"]),
                 sz, b_bit
             )

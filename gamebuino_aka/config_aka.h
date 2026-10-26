@@ -37,11 +37,12 @@
 #define AKA_BTN_Y      (1 << 7) // Potion rapide
 #define AKA_BTN_MENU   (1 << 8) // Inventaire & Sauvegarde SD
 
-// Flags de progression narrative (identiques à la version Web / world_expanded.json)
-#define FLAG_MET_SAGE          (1u << 0)
-#define FLAG_BOSS_GROTTE       (1u << 1) // Morvath vaincue -> Ouvre Château
-#define FLAG_SPOKE_KING        (1u << 2) // Audience Roi Édouard IV -> Ouvre Oubliettes
-#define FLAG_BOSS_CHATEAU      (1u << 3) // Sire Malakor vaincu -> Ouvre Forêt de Sylvebrume
-#define FLAG_BOSS_TEMPLE       (1u << 4) // Léviathanis vaincu -> Ouvre Crypte
-#define FLAG_BOSS_CRYPTE       (1u << 5) // Archiliche Vorgath vaincue -> Ouvre Terres Ardentes
-#define FLAG_BOSS_CITADELLE    (1u << 6) // Pyraxis vaincu -> Aube Éternelle
+// Flags de progression narrative (alignés à 100 % sur world_expanded.json)
+#define FLAG_TALKED_SAGE       (1u << 0) // talked_sage   -> Ouvre Grotte de l'Aube
+#define FLAG_ACT1_DONE         (1u << 1) // act1_done     -> Les gardes du Château partent
+#define FLAG_TALKED_ROI        (1u << 2) // talked_roi    -> Ouvre Oubliettes Royales
+#define FLAG_ACT2_STARTED      (1u << 3) // act2_started  -> Les gardes de Sylvebrume partent
+#define FLAG_TALKED_ELOWEN     (1u << 4) // talked_elowen -> Les gardes du Temple partent
+#define FLAG_ACT3_DONE         (1u << 5) // act3_done     -> Les gardes de la Crypte partent
+#define FLAG_ACT4_DONE         (1u << 6) // act4_done     -> Les gardes des Terres Ardentes partent
+#define FLAG_BOSS_PYRAXIS      (1u << 7) // boss_pyraxis  -> Victoire finale

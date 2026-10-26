@@ -176,6 +176,10 @@ static bool maskHitsRect(const uint8_t* bits, int rx, int ry, int rw, int rh) {
   return false;
 }
 
+static inline bool isAkaNpcPresent(const AkaNpcDef& n) {
+  return !(n.blockUntilMask != 0 && (playerState.flags & n.blockUntilMask) != 0);
+}
+
 static bool collidesWorld(int rx, int ry, int rw, int rh) {
   if (rx < 0 || ry < 0 || rx + rw > curMapHdr.w * 32 || ry + rh > curMapHdr.h * 32) return true;
   int tx0 = rx / 32, tx1 = (rx + rw - 1) / 32;
@@ -191,11 +195,11 @@ static bool collidesWorld(int rx, int ry, int rw, int rh) {
     }
   }
 
-  // Gardes bloquant les routes fermées (partent automatiquement dès que le flag est débloqué !)
+  // Gardes bloquant les routes fermées (disparaissent dès que le flag est débloqué !)
   for (uint16_t i = 0; i < curNpcCount; i++) {
     const AkaNpcDef& n = curNpcs[i];
-    if (n.blockUntilMask != 0 && (playerState.flags & n.blockUntilMask) != 0) continue;
-    if (rx < n.x + 24 && rx + rw > n.x + 4 && ry < n.y + 28 && ry + rh > n.y + 6) return true;
+    if (!isAkaNpcPresent(n)) continue;
+    if (rx < n.x + 28 && rx + rw > n.x + 2 && ry < n.y + 30 && ry + rh > n.y + 4) return true;
   }
   return false;
 }
@@ -345,6 +349,33 @@ static void updateGameTick(uint16_t btns) {
       }
     }
 
+    // Dialogue PNJ proche (déverrouille aussi les passages associés)
+    for (uint16_t i = 0; i < curNpcCount; i++) {
+      const AkaNpcDef& n = curNpcs[i];
+      if (!isAkaNpcPresent(n)) continue;
+      if (abs(playerState.wx - (n.x + 16)) < 34 && abs(playerState.wy - (n.y + 16)) < 34) {
+        if (n.dlgId == 1) {
+          playerState.flags |= FLAG_TALKED_SAGE;
+          playerState.hp = playerState.maxHp;
+          bannerToast = "Aldric: Escalier de la Grotte ouvert !";
+          bannerTicks = 60;
+        } else if (n.dlgId == 2) {
+          playerState.flags |= FLAG_TALKED_ROI;
+          playerState.hp = playerState.maxHp;
+          bannerToast = "Roi Edouard IV: Oubliettes ouvertes !";
+          bannerTicks = 60;
+        } else if (n.dlgId == 3) {
+          playerState.flags |= FLAG_TALKED_ELOWEN;
+          playerState.hp = playerState.maxHp;
+          bannerToast = "Elowen: Barrage du Temple leve !";
+          bannerTicks = 60;
+        } else if (n.blockUntilMask != 0) {
+          bannerToast = "Halte ! Ce passage est scelle.";
+          bannerTicks = 45;
+        }
+      }
+    }
+
     // Frappe sur les monstres à portée
     int sx = playerState.wx + (playerDir == 1 ? -22 : playerDir == 2 ? 22 : 0);
     int sy = playerState.wy + (playerDir == 3 ? -22 : playerDir == 0 ? 22 : 0);
@@ -448,6 +479,14 @@ static void renderAkaFrame() {
     blitTile565(opened ? 2572 : 2570, ox + c.x + 28, oy + c.y);
   }
 
+  // PNJ & Gardes de barrage (disparaissent automatiquement dès que le passage est ouvert)
+  for (uint16_t i = 0; i < curNpcCount; i++) {
+    const AkaNpcDef& n = curNpcs[i];
+    if (!isAkaNpcPresent(n)) continue;
+    uint16_t npcCol = (n.blockUntilMask != 0) ? 0x9CF3 : 0x3DDF;
+    fillRect565(ox + n.x + 6, oy + n.y + 4, 20, 26, npcCol);
+  }
+
   // Monstres & Boss
   for (uint16_t i = 0; i < curSpawnCount; i++) {
     const LiveMob& m = liveMobs[i];
@@ -500,7 +539,7 @@ void setup() {
   for (int i = 0; i < AKA_TILE_CACHE_SLOTS; i++) tileCache[i].tid = -1;
 
   SD.begin();
-  playerState = { {'E','S','A','V'}, 1, 0, 306, 160, 85, 85, 1, 0, 40, FLAG_MET_SAGE, 0ULL, 3, 1, 1, 0 };
+  playerState = { {'E','S','A','V'}, 1, 0, 306, 160, 85, 85, 1, 0, 40, 0u, 0ULL, 3, 1, 1, 0 };
 
   if (SD.exists(AKA_PATH_SAVE)) {
     File sf = SD.open(AKA_PATH_SAVE, FILE_READ);

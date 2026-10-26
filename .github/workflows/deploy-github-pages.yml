@@ -1,0 +1,60 @@
+name: Déployer sur GitHub Pages (Jeu Web, Éditeur HTML & Packs)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: ethynd-github-pages
+  cancel-in-progress: false
+
+jobs:
+  build-pages:
+    name: "Compilation Web + Éditions HTML & Gamebuino AKA"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupération du dépôt
+        uses: actions/checkout@v4
+
+      - name: Configuration de Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Configuration de GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Installation des dépendances
+        run: npm ci
+
+      - name: Vérification TypeScript & Compilation complète de toutes les éditions
+        env:
+          VITE_BASE_PATH: "./"
+        run: |
+          npm run lint
+          npx tsx scripts/build-editions.ts --target=all --sync-public-editor
+
+      - name: Téléversement de l'artefact GitHub Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./dist
+
+  deploy-pages:
+    name: "Publication sur GitHub Pages"
+    needs: build-pages
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Déploiement vers GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

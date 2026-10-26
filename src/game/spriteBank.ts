@@ -6,6 +6,7 @@ import {
   buildMorvathBroodmotherSprite,
   buildSirMalakorSprite,
 } from './monsterArt';
+import { assetUrl } from './assetUrl';
 import { Direction } from './types';
 
 export type SpriteCanvas = HTMLCanvasElement | HTMLImageElement;
@@ -573,13 +574,13 @@ export function loadSpriteBank(): Promise<SpriteBank> {
     const seq16 = ['00', '01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12', '13', '14', '15'];
 
     const [tileset, heart] = await Promise.all([
-      loadImage('/ethynd/tileset.png'),
-      loadImage('/ethynd/coeur.png'),
+      loadImage(assetUrl('ethynd/tileset.png')),
+      loadImage(assetUrl('ethynd/coeur.png')),
     ]);
 
     const loadGroup = async (prefix: string, nums: string[]) => {
       const entries = await Promise.all(
-        nums.map(async (n) => [n, await loadImage(`/ethynd/sprites/${prefix}_${n}.png`)] as const)
+        nums.map(async (n) => [n, await loadImage(assetUrl(`ethynd/sprites/${prefix}_${n}.png`))] as const)
       );
       return Object.fromEntries(entries) as Record<string, HTMLImageElement>;
     };

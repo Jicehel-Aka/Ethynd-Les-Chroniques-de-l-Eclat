@@ -13,6 +13,7 @@ import { QuestsView } from './components/QuestsView';
 import { TestSuiteView } from './components/TestSuiteView';
 import { TitleScreen } from './components/TitleScreen';
 import { TopBar } from './components/TopBar';
+import { assetUrl } from './game/assetUrl';
 import { audioEngine } from './game/audioEngine';
 import { computeDerivedStats, createInitialProgress } from './game/content';
 import { SpriteBank, loadSpriteBank } from './game/spriteBank';
@@ -77,7 +78,7 @@ export default function App() {
     setLoadError(null);
     try {
       const [worldRes, loadedSprites] = await Promise.all([
-        fetch('/ethynd/world_expanded.json').then(async (res) => {
+        fetch(assetUrl('ethynd/world_expanded.json')).then(async (res) => {
           if (!res.ok) {
             throw new Error(`HTTP ${res.status}`);
           }

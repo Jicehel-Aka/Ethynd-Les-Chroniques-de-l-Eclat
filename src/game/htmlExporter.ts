@@ -45,7 +45,7 @@ function serializeAnimSet(anim: EntityAnimSet): SerializedAnimSet {
   return { size: anim.size, walk, attack };
 }
 
-export function exportStandaloneSimulationHtml(
+export function buildStandaloneSimulationHtmlDocument(
   world: WorldBundle,
   sprites: SpriteBank,
   currentProgress: PlayerProgress,
@@ -1537,6 +1537,16 @@ export function exportStandaloneSimulationHtml(
 </body>
 </html>`;
 
+  return html;
+}
+
+export function exportStandaloneSimulationHtml(
+  world: WorldBundle,
+  sprites: SpriteBank,
+  currentProgress: PlayerProgress,
+  lang: LangCode
+): string {
+  const html = buildStandaloneSimulationHtmlDocument(world, sprites, currentProgress, lang);
   const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');

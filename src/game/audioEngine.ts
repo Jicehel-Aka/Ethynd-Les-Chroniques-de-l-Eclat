@@ -1,3 +1,5 @@
+import { assetUrl } from './assetUrl';
+
 export type MusicMode = 'evolved' | 'classic';
 
 type LeadInstrument = 'flute' | 'harp' | 'strings' | 'bell' | 'brass';
@@ -1201,7 +1203,7 @@ class EthyndAudioEngine {
   public playWalkStep() {
     if (this.muted || typeof Audio === 'undefined') return;
     if (!this.walkAudio) {
-      this.walkAudio = new Audio('/ethynd/audio/joueur_marche.mp3');
+      this.walkAudio = new Audio(assetUrl('ethynd/audio/joueur_marche.mp3'));
       this.walkAudio.volume = this.sfxVolume * 0.4;
     }
     if (this.walkAudio.paused) {
@@ -1221,7 +1223,7 @@ class EthyndAudioEngine {
     if (this.muted || typeof Audio === 'undefined') return;
     let base = this.sfxCache[key];
     if (!base) {
-      base = new Audio(`/ethynd/audio/${key}.mp3`);
+      base = new Audio(assetUrl(`ethynd/audio/${key}.mp3`));
       this.sfxCache[key] = base;
     }
     const clone = base.cloneNode() as HTMLAudioElement;

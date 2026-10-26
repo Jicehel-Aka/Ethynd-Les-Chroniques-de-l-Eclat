@@ -7,3 +7,5 @@ coverage/
 .env*
 !.env.example
 gamebuino_aka/SD_CARD/
+gamebuino_aka/.pio/
+release-builds/

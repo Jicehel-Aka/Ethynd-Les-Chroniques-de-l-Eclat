@@ -6,8 +6,13 @@
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
     "build": "vite build",
+    "build:web": "tsx scripts/build-editions.ts --target=web",
+    "build:html": "tsx scripts/build-editions.ts --target=html",
+    "build:aka": "tsx scripts/build-editions.ts --target=aka",
+    "build:all": "tsx scripts/build-editions.ts --target=all",
+    "verify:world": "tsx scripts/build-editions.ts --target=verify",
     "preview": "vite preview",
-    "clean": "rm -rf dist server.js",
+    "clean": "rm -rf dist release-builds server.js",
     "lint": "tsc --noEmit"
   },
   "dependencies": {

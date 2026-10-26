@@ -1,0 +1,65 @@
+name: Compiler Console Gamebuino AKA (Firmware ESP32-S3 & MicroSD)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "gamebuino_aka/**"
+      - "public/ethynd/world_expanded.json"
+      - "public/ethynd/tileset.png"
+      - "src/game/akaBinaryCore.ts"
+
+permissions:
+  contents: read
+
+jobs:
+  build-aka:
+    name: "Firmware ESP32-S3 + Carte MicroSD (/ETHYND/*.BIN & *.565)"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupération du dépôt
+        uses: actions/checkout@v4
+
+      - name: Configuration de Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Configuration de Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache PlatformIO
+        uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: ${{ runner.os }}-pio-aka-${{ hashFiles('gamebuino_aka/platformio.ini') }}
+          restore-keys: |
+            ${{ runner.os }}-pio-aka-
+
+      - name: Installation de PlatformIO Core
+        run: pip install --upgrade platformio
+
+      - name: Compilation du Firmware ESP32-S3 (ethynd_aka.ino)
+        run: pio run -d gamebuino_aka
+
+      - name: Installation des dépendances Node.js & Génération MicroSD RGB565
+        run: |
+          npm ci
+          npm run build:aka
+
+      - name: Publication de l'archive complète Gamebuino AKA
+        uses: actions/upload-artifact@v4
+        with:
+          name: ethynd-gamebuino-aka-firmware-et-sd
+          path: |
+            release-builds/ethynd-gamebuino-aka-pack.zip
+            release-builds/gamebuino-aka/SD_CARD/ETHYND/WORLD.BIN
+            release-builds/gamebuino-aka/SD_CARD/ETHYND/TILESET.565
+            release-builds/gamebuino-aka/SD_CARD/ETHYND/SPRITES.565
+            gamebuino_aka/.pio/build/gamebuino_aka_esp32s3/firmware.bin
+            gamebuino_aka/.pio/build/gamebuino_aka_esp32s3/firmware.elf
+          if-no-files-found: error
+          retention-days: 30
