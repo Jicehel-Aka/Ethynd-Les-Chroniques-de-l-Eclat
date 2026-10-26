@@ -1,0 +1,6 @@
+{
+  "name": "Ethynd : Les Chroniques de l'Éclat",
+  "description": "RPG d'action-aventure 2D étendu basé sur Ethynd : vaste royaume multi-régions, donjons inédits, bestiaire élargi, progression d'équipement, quêtes et codex de lore.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
