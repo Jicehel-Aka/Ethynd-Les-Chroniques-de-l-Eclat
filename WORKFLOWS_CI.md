@@ -31,9 +31,16 @@ Trois workflows GitHub Actions (`.github/workflows/`) permettent de compiler, te
 **Fichier** : `.github/workflows/deploy-github-pages.yml`  
 **Nom dans GitHub Actions** : `Déployer sur GitHub Pages (Jeu Web, Éditeur HTML & Packs)`
 
+### Activation initiale unique dans GitHub (obligatoire la 1re fois) :
+Par sécurité, GitHub interdit au jeton automatique `GITHUB_TOKEN` d'initialiser GitHub Pages sur un dépôt où Pages n'a jamais été activé :
+1. Vérifiez que le dépôt est **Public** *(requis sur les comptes GitHub gratuits pour disposer de GitHub Pages)*.
+2. Ouvrez l'onglet **Settings** de votre dépôt → menu **Pages** (colonne de gauche).
+3. Sous **Build and deployment → Source**, remplacez *Deploy from a branch* par **`GitHub Actions`** *(l'enregistrement est immédiat)*.
+
+### Fonctionnement :
 - Se lance automatiquement à chaque `push` sur `main` ou manuellement via **`Run workflow`**.
-- Activez une seule fois dans GitHub : **Settings → Pages → Build and deployment → Source : `GitHub Actions`**.
-- Une fois déployé sur `https://<votre-compte>.github.io/<votre-depot>/` :
+- **Si GitHub Pages n'est pas encore activé**, le workflow ne plante plus : il compile et valide tout de même toutes les éditions, dépose le site prêt à héberger dans l'artefact `ethynd-site-web-pret-a-publier`, et affiche un rappel d'activation dans le résumé de l'exécution.
+- **Une fois activé**, votre site est publié automatiquement sur `https://<votre-compte>.github.io/<votre-depot>/` :
   - `/` : Application Web complète (Jeu, Atlas des 11 cartes, Bestiaire, Quêtes, Suite de tests),
   - `/releases/simulation_ethynd.html` : Jeu HTML5 monofichier autonome,
   - `/releases/editeur_niveaux.html` : Éditeur de niveaux HTML5 autonome,

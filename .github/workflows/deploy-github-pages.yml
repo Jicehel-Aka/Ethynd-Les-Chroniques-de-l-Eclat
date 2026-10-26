@@ -19,6 +19,8 @@ jobs:
   build-pages:
     name: "Compilation Web + Éditions HTML & Gamebuino AKA"
     runs-on: ubuntu-latest
+    outputs:
+      pages_ready: ${{ steps.check_pages.outputs.ready == 'true' && steps.pages.outcome == 'success' }}
     steps:
       - name: Récupération du dépôt
         uses: actions/checkout@v6
@@ -36,7 +38,64 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-npm-
 
+      - name: Vérification de l'activation de GitHub Pages
+        id: check_pages
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          node --input-type=module << 'EOF'
+          import fs from "node:fs";
+
+          const apiUrl = process.env.GITHUB_API_URL || "https://api.github.com";
+          const repo = process.env.GITHUB_REPOSITORY;
+          const token = process.env.GITHUB_TOKEN;
+          const outPath = process.env.GITHUB_OUTPUT;
+
+          let ready = "false";
+          let reason = "not_enabled";
+
+          try {
+            const res = await fetch(`${apiUrl}/repos/${repo}/pages`, {
+              headers: {
+                Authorization: `Bearer ${token}`,
+                Accept: "application/vnd.github+json",
+                "X-GitHub-Api-Version": "2022-11-28",
+              },
+            });
+
+            if (res.ok) {
+              const data = await res.json();
+              if (data.build_type === "legacy") {
+                ready = "false";
+                reason = "legacy";
+                console.log(
+                  "::warning title=Source GitHub Pages à modifier::GitHub Pages est actuellement réglé sur 'Deploy from a branch'. Ouvrez Settings -> Pages -> Build and deployment -> Source et sélectionnez 'GitHub Actions'."
+                );
+              } else {
+                ready = "true";
+                reason = "ready";
+                console.log(
+                  `GitHub Pages est activé et prêt (source: ${data.build_type || "workflow"}, url: ${data.html_url || "en attente du premier déploiement"}).`
+                );
+              }
+            } else {
+              console.log(
+                `::warning title=GitHub Pages non activé (HTTP ${res.status})::Ouvrez Settings -> Pages -> Build and deployment -> Source et sélectionnez 'GitHub Actions' (dépôt Public requis sur un compte GitHub gratuit).`
+              );
+            }
+          } catch (err) {
+            console.log(`::warning title=Vérification GitHub Pages impossible::${err}`);
+          }
+
+          if (outPath) {
+            fs.appendFileSync(outPath, `ready=${ready}\nreason=${reason}\n`);
+          }
+          EOF
+
       - name: Configuration de GitHub Pages
+        id: pages
+        if: steps.check_pages.outputs.ready == 'true'
+        continue-on-error: true
         uses: actions/configure-pages@v6
 
       - name: Installation des dépendances
@@ -55,13 +114,40 @@ jobs:
           npx tsx scripts/build-editions.ts --target=all --sync-public-editor
 
       - name: Téléversement de l'artefact GitHub Pages
+        if: steps.check_pages.outputs.ready == 'true' && steps.pages.outcome == 'success'
         uses: actions/upload-pages-artifact@v5
         with:
           path: ./dist
 
+      - name: Archive de secours & Guide d'activation GitHub Pages
+        if: steps.check_pages.outputs.ready != 'true' || steps.pages.outcome != 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ethynd-site-web-pret-a-publier
+          path: ./dist
+          if-no-files-found: error
+
+      - name: Instructions d'activation dans le résumé GitHub Actions
+        if: steps.check_pages.outputs.ready != 'true' || steps.pages.outcome != 'success'
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" << 'EOF'
+          ## ⚠️ Activation unique requise pour publier sur GitHub Pages
+
+          Toutes les versions (**Application Web, Simulation HTML5, Éditeur de niveaux HTML5 et Pack Gamebuino AKA**) ont bien été compilées et validées (disponibles ci-dessous dans l'artefact **`ethynd-site-web-pret-a-publier`**).
+
+          Par sécurité, GitHub n'autorise pas le jeton automatique `GITHUB_TOKEN` à activer GitHub Pages la toute première fois à votre place.
+
+          ### Activer la mise en ligne en 3 clics :
+          1. Assurez-vous que votre dépôt est **Public** *(requis sur les comptes GitHub Free pour bénéficier de GitHub Pages)*.
+          2. Ouvrez l'onglet **Settings** du dépôt (en haut) → rubrique **Pages** (menu de gauche).
+          3. Dans **Build and deployment → Source**, remplacez *Deploy from a branch* par **`GitHub Actions`**.
+          4. Relancez ce workflow (**Actions → Déployer sur GitHub Pages → Run workflow**) : votre site sera immédiatement mis en ligne !
+          EOF
+
   deploy-pages:
     name: "Publication sur GitHub Pages"
     needs: build-pages
+    if: needs.build-pages.outputs.pages_ready == 'true'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
