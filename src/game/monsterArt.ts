@@ -959,3 +959,243 @@ export function buildArchlichVorgathSprite(): EntityAnimSet {
     return s;
   });
 }
+
+// ============================================================================
+// 6. MORVATH, REINE DE LA CAVERNE (Boss Act I) — 48x48 4-Directional Arachnid Queen
+// ============================================================================
+export function buildMorvathBroodmotherSprite(): EntityAnimSet {
+  const carapaceDeep = '#17153b';
+  const carapaceDark = '#2e236c';
+  const carapaceMid = '#433d8b';
+  const carapaceHi = '#818cf8';
+  const chitinSpec = '#c7d2fe';
+  const legDark = '#1e1b4b';
+  const legMid = '#3730a3';
+  const legJoint = '#a855f7';
+  const crystDark = '#6b21a8';
+  const crystMid = '#a855f7';
+  const crystHi = '#e879f9';
+  const dawnGold = '#fde047';
+  const dawnWarm = '#f59e0b';
+  const eyeOuter = '#15803d';
+  const eyeMid = '#4ade80';
+  const eyeCore = '#dcfce7';
+  const fangBone = '#e2e8f0';
+  const fangShade = '#94a3b8';
+
+  return buildFourDirSet(48, (dir, f) => {
+    const s = new PixelSurface(48, 48);
+    // Alternating tetrapod arachnid gait across 4 frames
+    const gaitA = f === 1 ? -2 : f === 3 ? 2 : 0;
+    const gaitB = -gaitA;
+    const bodyBob = f === 1 || f === 3 ? 1 : 0;
+    const drip = f === 2 || f === 3;
+
+    // Cavern shadow pool beneath Morvath
+    s.ellipse(24, 41, 16, 4, '#090818aa');
+
+    const drawSymmetricLegs = (frontYBias: number) => {
+      const pairs = [
+        { hipY: 22, kneeX: 11, kneeY: 14 + gaitA, tipX: 4, tipY: 21 + gaitA + frontYBias },
+        { hipY: 25, kneeX: 9, kneeY: 20 + gaitB, tipX: 3, tipY: 29 + gaitB },
+        { hipY: 28, kneeX: 10, kneeY: 27 + gaitA, tipX: 4, tipY: 36 + gaitA },
+        { hipY: 31, kneeX: 12, kneeY: 33 + gaitB, tipX: 8, tipY: 42 + gaitB - frontYBias },
+      ];
+      for (const p of pairs) {
+        // Left articulated leg (femur + tibia + chitinous joint)
+        s.line(17, p.hipY + bodyBob, p.kneeX, p.kneeY, legMid);
+        s.line(17, p.hipY + 1 + bodyBob, p.kneeX, p.kneeY + 1, legDark);
+        s.line(p.kneeX, p.kneeY, p.tipX, p.tipY, legMid);
+        s.line(p.kneeX + 1, p.kneeY + 1, p.tipX + 1, p.tipY, legDark);
+        s.rect(p.kneeX - 1, p.kneeY - 1, 2, 2, legJoint);
+        s.px(p.tipX, p.tipY, chitinSpec);
+
+        // Right articulated leg
+        const rkX = 47 - p.kneeX;
+        const rtX = 47 - p.tipX;
+        s.line(30, p.hipY + bodyBob, rkX, p.kneeY, legMid);
+        s.line(30, p.hipY + 1 + bodyBob, rkX, p.kneeY + 1, legDark);
+        s.line(rkX, p.kneeY, rtX, p.tipY, legMid);
+        s.line(rkX - 1, p.kneeY + 1, rtX - 1, p.tipY, legDark);
+        s.rect(rkX, p.kneeY - 1, 2, 2, legJoint);
+        s.px(rtX, p.tipY, chitinSpec);
+      }
+    };
+
+    const drawCrystalCluster = (cx: number, cy: number, tall: boolean) => {
+      // Faceted amethyst + Dawn-Shard crystal spire growing out of Morvath's carapace
+      const h = tall ? 7 : 5;
+      s.line(cx, cy, cx - 2, cy - h + 2, crystDark);
+      s.line(cx, cy, cx, cy - h, crystHi);
+      s.line(cx + 1, cy, cx + 1, cy - h + 1, crystMid);
+      s.line(cx + 2, cy, cx + 3, cy - h + 3, crystDark);
+      s.px(cx, cy - h, '#ffffff');
+      if (tall) {
+        s.px(cx, cy - h + 2, dawnGold);
+        s.px(cx + 1, cy - h + 3, dawnWarm);
+      }
+    };
+
+    if (dir === 'bas') {
+      drawSymmetricLegs(0);
+
+      // Massive Segmented Brood-Abdomen (looming behind cephalothorax, y=7..26)
+      s.ellipse(24, 17 + bodyBob, 11.5, 9.5, carapaceDeep);
+      s.ellipse(24, 16 + bodyBob, 10, 8, carapaceDark);
+      s.ellipse(24, 15 + bodyBob, 8, 6, carapaceMid);
+      // Segmented chitinous plates + specular ridges
+      for (const ry of [11, 14, 17, 20]) {
+        s.hline(17, 30, ry + bodyBob, carapaceDeep);
+        s.hline(19, 28, ry - 1 + bodyBob, carapaceHi);
+      }
+      // Crown of Crystalline Spires on Dorsal Abdomen (Dawn Shard resonance)
+      drawCrystalCluster(18, 12 + bodyBob, false);
+      drawCrystalCluster(24, 10 + bodyBob, true);
+      drawCrystalCluster(29, 12 + bodyBob, false);
+
+      // Armored Cephalothorax & Horned Crest (foreground, y=21..34)
+      s.ellipse(24, 27 + bodyBob, 8.5, 6.5, carapaceDeep);
+      s.ellipse(24, 26 + bodyBob, 7, 5.2, carapaceMid);
+      s.hline(20, 27, 22 + bodyBob, carapaceHi);
+      s.line(18, 23 + bodyBob, 15, 19 + bodyBob, carapaceHi);
+      s.line(29, 23 + bodyBob, 32, 19 + bodyBob, carapaceHi);
+      // Dawn-Shard rune embedded in forehead plate
+      s.rect(23, 23 + bodyBob, 2, 3, dawnWarm);
+      s.px(23, 23 + bodyBob, dawnGold);
+
+      // 6 Glowing Emerald Arachnid Eyes in Curved Hunter Arc
+      s.rect(19, 27 + bodyBob, 3, 2, eyeOuter);
+      s.rect(26, 27 + bodyBob, 3, 2, eyeOuter);
+      s.px(20, 27 + bodyBob, eyeCore);
+      s.px(21, 28 + bodyBob, eyeMid);
+      s.px(27, 27 + bodyBob, eyeCore);
+      s.px(26, 28 + bodyBob, eyeMid);
+      // Lateral secondary eyes
+      s.px(17, 26 + bodyBob, eyeMid);
+      s.px(18, 29 + bodyBob, eyeMid);
+      s.px(30, 26 + bodyBob, eyeMid);
+      s.px(29, 29 + bodyBob, eyeMid);
+
+      // Pedipalps & Serrated Venom-Dripping Chelicerae Mandibles (y=31..40)
+      s.line(16, 30 + bodyBob, 13, 35 + bodyBob, legMid);
+      s.line(13, 35 + bodyBob, 15, 38 + bodyBob, carapaceHi);
+      s.line(31, 30 + bodyBob, 34, 35 + bodyBob, legMid);
+      s.line(34, 35 + bodyBob, 32, 38 + bodyBob, carapaceHi);
+
+      // Left & right ivory chelicerae curving inward
+      s.rect(19, 32 + bodyBob, 3, 5, fangShade);
+      s.vline(20, 32 + bodyBob, 37 + bodyBob, fangBone);
+      s.px(21, 38 + bodyBob, fangBone);
+      s.px(22, 39 + bodyBob, eyeMid);
+
+      s.rect(26, 32 + bodyBob, 3, 5, fangShade);
+      s.vline(27, 32 + bodyBob, 37 + bodyBob, fangBone);
+      s.px(26, 38 + bodyBob, fangBone);
+      s.px(25, 39 + bodyBob, eyeMid);
+
+      if (drip) {
+        s.px(22, 41 + bodyBob, eyeCore);
+        s.px(25, 42 + bodyBob, eyeMid);
+      }
+    } else if (dir === 'haut') {
+      // Rear View: Cephalothorax & Mandibles ahead (top), Towering Crystal-Studded Abdomen in foreground
+      drawSymmetricLegs(-1);
+
+      // Forward-pointing mandibles & head plate peeking at top (y=9..18)
+      s.line(19, 13 + bodyBob, 17, 8 + bodyBob, fangBone);
+      s.line(28, 13 + bodyBob, 30, 8 + bodyBob, fangBone);
+      s.ellipse(24, 16 + bodyBob, 7.5, 5, carapaceDark);
+      s.hline(20, 27, 13 + bodyBob, carapaceHi);
+
+      // Foreground Armored Brood-Abdomen (y=17..38)
+      s.ellipse(24, 27 + bodyBob, 12, 10, carapaceDeep);
+      s.ellipse(24, 26 + bodyBob, 10.5, 8.5, carapaceDark);
+      s.ellipse(24, 25 + bodyBob, 8.5, 6.5, carapaceMid);
+      for (const ry of [21, 25, 29, 33]) {
+        s.hline(16, 31, ry + bodyBob, carapaceDeep);
+        s.hline(18, 29, ry - 1 + bodyBob, carapaceHi);
+      }
+      // Three prominent dorsal crystal spires
+      drawCrystalCluster(18, 23 + bodyBob, false);
+      drawCrystalCluster(24, 21 + bodyBob, true);
+      drawCrystalCluster(29, 23 + bodyBob, false);
+
+      // Rear chitinous spinnerets at y=36..39
+      s.rect(21, 36 + bodyBob, 2, 3, legJoint);
+      s.rect(25, 36 + bodyBob, 2, 3, legJoint);
+    } else {
+      // Side Profile (facing LEFT; automatically mirrored for RIGHT)
+      // Background legs (far side, darker indigo)
+      const bgLegs = [
+        { hx: 17, hy: 26, kx: 11, ky: 17 + gaitB, tx: 6, ty: 26 + gaitB },
+        { hx: 21, hy: 26, kx: 18, ky: 16 + gaitA, tx: 14, ty: 28 + gaitA },
+        { hx: 26, hy: 26, kx: 26, ky: 17 + gaitB, tx: 25, ty: 29 + gaitB },
+        { hx: 30, hy: 26, kx: 35, ky: 18 + gaitA, tx: 39, ty: 28 + gaitA },
+      ];
+      for (const l of bgLegs) {
+        s.line(l.hx, l.hy + bodyBob, l.kx, l.ky, legDark);
+        s.line(l.kx, l.ky, l.tx, l.ty, legDark);
+      }
+
+      // Elevated Rear Brood-Abdomen on right side (x=21..43, y=12..31)
+      s.ellipse(32, 22 + bodyBob, 10.5, 8.5, carapaceDeep);
+      s.ellipse(32, 21 + bodyBob, 9, 7, carapaceDark);
+      s.ellipse(31, 20 + bodyBob, 7, 5, carapaceMid);
+      // Angled segmented tergites
+      for (const ax of [26, 30, 34, 38]) {
+        s.line(ax, 15 + bodyBob, ax + 2, 27 + bodyBob, carapaceDeep);
+        s.line(ax - 1, 15 + bodyBob, ax + 1, 25 + bodyBob, carapaceHi);
+      }
+      // Dorsal Crystal Spires Swept Back along Abdomen
+      drawCrystalCluster(28, 15 + bodyBob, true);
+      drawCrystalCluster(34, 15 + bodyBob, false);
+      drawCrystalCluster(39, 18 + bodyBob, false);
+      // Rear spinneret
+      s.line(41, 24 + bodyBob, 44, 26 + bodyBob, legJoint);
+
+      // Low-slung Armored Cephalothorax on left side (x=10..24, y=21..33)
+      s.ellipse(17, 27 + bodyBob, 7, 5.5, carapaceDeep);
+      s.ellipse(17, 26 + bodyBob, 5.8, 4.3, carapaceMid);
+      s.hline(13, 21, 22 + bodyBob, carapaceHi);
+      s.line(18, 22 + bodyBob, 23, 18 + bodyBob, carapaceHi);
+      s.rect(14, 23 + bodyBob, 2, 2, dawnGold);
+
+      // Glowing Emerald Hunter Eyes on left brow
+      s.rect(11, 25 + bodyBob, 3, 2, eyeOuter);
+      s.px(11, 25 + bodyBob, eyeCore);
+      s.px(12, 26 + bodyBob, eyeMid);
+      s.px(14, 24 + bodyBob, eyeMid);
+      s.px(14, 27 + bodyBob, eyeMid);
+
+      // Forward-jutting Pedipalp & Curved Ivory Fang (x=4..12, y=28..37)
+      s.line(12, 29 + bodyBob, 7, 27 + bodyBob, legMid);
+      s.line(7, 27 + bodyBob, 5, 32 + bodyBob, carapaceHi);
+      s.line(11, 30 + bodyBob, 7, 34 + bodyBob, fangBone);
+      s.line(12, 31 + bodyBob, 8, 35 + bodyBob, fangShade);
+      s.px(7, 35 + bodyBob, eyeMid);
+      if (drip) {
+        s.px(7, 37 + bodyBob, eyeCore);
+      }
+
+      // Foreground Articulated Legs (near side, bright indigo + amethyst joints + specular claw tips)
+      const fgLegs = [
+        { hx: 16, hy: 29, kx: 10, ky: 22 + gaitA, tx: 5, ty: 38 + gaitA },
+        { hx: 20, hy: 30, kx: 16, ky: 23 + gaitB, tx: 13, ty: 41 + gaitB },
+        { hx: 25, hy: 30, kx: 26, ky: 23 + gaitA, tx: 26, ty: 41 + gaitA },
+        { hx: 29, hy: 29, kx: 35, ky: 23 + gaitB, tx: 39, ty: 40 + gaitB },
+      ];
+      for (const l of fgLegs) {
+        s.line(l.hx, l.hy + bodyBob, l.kx, l.ky, legMid);
+        s.line(l.hx, l.hy + 1 + bodyBob, l.kx, l.ky + 1, carapaceHi);
+        s.line(l.kx, l.ky, l.tx, l.ty, legMid);
+        s.line(l.kx + 1, l.ky, l.tx + 1, l.ty, legDark);
+        s.rect(l.kx - 1, l.ky - 1, 2, 2, legJoint);
+        s.px(l.tx, l.ty, chitinSpec);
+      }
+    }
+
+    s.outline('#090514');
+    return s;
+  });
+}
+

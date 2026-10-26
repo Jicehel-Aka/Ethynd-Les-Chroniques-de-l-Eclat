@@ -3,6 +3,7 @@ import {
   buildBoneKnightSprite,
   buildCasterSprite,
   buildGolemSprite,
+  buildMorvathBroodmotherSprite,
   buildSirMalakorSprite,
 } from './monsterArt';
 import { Direction } from './types';
@@ -303,49 +304,6 @@ function makeKnightOrSkeletonAnim(
         step === 0 ? '...KAAK..KAAK...' : '...KAK....KAK...',
         step === 0 ? '..KHHK....KHHK..' : '...KHHK..KHHK...',
         '..KKKK....KKKK..',
-        '................',
-        '................',
-      ],
-      pal,
-      sc
-    );
-  const seq = [makeFrame(0), makeFrame(1), makeFrame(0), makeFrame(1)];
-  return {
-    size,
-    walk: {
-      [Direction.Bas]: seq,
-      [Direction.Haut]: seq,
-      [Direction.Gauche]: seq,
-      [Direction.Droite]: seq,
-    },
-  };
-}
-
-function makeBroodmotherAnim(
-  carapace: string,
-  crystal: string,
-  eye: string,
-  size = 48
-): EntityAnimSet {
-  const sc = size / 16;
-  const pal = { K: '#0c0d14', C: carapace, X: crystal, W: '#e9d5ff', E: eye };
-  const makeFrame = (step: number) =>
-    drawPixelGrid(
-      [
-        '....KX..KK..XK..',
-        '...KXXKXXXXKXXK.',
-        '..KCCXXXXXXXXCCK',
-        '..KCCCXWXXWXCCCK',
-        '.KCCCCCCCCCCCCCC',
-        '.KCCXXXXXXXXCCCK',
-        'KKCCCCCCCCCCCCKK',
-        'KCCCEEKCCCCKEECC',
-        '.KCCCCKWWWWKCCCK',
-        step === 0 ? 'KK.KCCK....KCC.K' : '.KKKCCK....KCCKK',
-        step === 0 ? 'K..KK........KKK' : '..KK..........KK',
-        step === 0 ? '..K..K......K..K' : '.K....K....K...K',
-        '................',
-        '................',
         '................',
         '................',
       ],
@@ -952,7 +910,7 @@ export function loadSpriteBank(): Promise<SpriteBank> {
       dragon_garde: makeDragonSet(48, { rMul: 0.92, gMul: 0.62, bMul: 0.52 }),
 
       // 5 GRAND BOSSES (True Red Dragon reserved exclusively for the Final Boss of Act V!)
-      reine_caverne: makeBroodmotherAnim('#312e81', '#c084fc', '#4ade80', 48),
+      reine_caverne: buildMorvathBroodmotherSprite(),
       chevalier_dechu: buildSirMalakorSprite(),
       leviathanis: makeHydraSerpentAnim('#0369a1', '#7dd3fc', '#38bdf8', '#fde047', 54),
       archiliche_vorgath: buildArchlichVorgathSprite(),

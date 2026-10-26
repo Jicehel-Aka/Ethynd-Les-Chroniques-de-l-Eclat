@@ -1,4 +1,11 @@
 import { ChangeEvent, MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { exportGamebuinoAkaPackZip } from '../game/akaExporter';
+import {
+  AUTOTILE_BRUSHES,
+  AutotileZoneId,
+  applyAutotileRectToLayers,
+  repairMapAutotiling,
+} from '../game/autotile';
 import {
   BESTIARY_CATALOG,
   EQUIPMENT_CATALOG,
@@ -9,6 +16,15 @@ import {
   resolveDoorDenyDialogue,
   resolveNpcDialogue,
 } from '../game/content';
+import {
+  EDITOR_THEMES,
+  EditorThemeId,
+  PREFAB_STAMPS,
+  THEMATIC_TILES,
+  UnifiedCatalogSelection,
+  renderShapePreviewCanvas,
+} from '../game/editorCatalog';
+import { exportStandaloneEditorHtml } from '../game/editorHtmlExporter';
 import { exportStandaloneSimulationHtml } from '../game/htmlExporter';
 import { SpriteBank } from '../game/spriteBank';
 import {
@@ -40,277 +56,7 @@ interface MapsAtlasViewProps {
 
 type ZoomMode = 'fit' | '50' | '100' | '150';
 type AtlasMode = 'inspect' | 'edit';
-type EditorTool = 'stamp' | 'brush' | 'eyedropper' | 'eraser';
-
-interface PrefabCell {
-  dx: number;
-  dy: number;
-  layer: 0 | 1 | 2 | 3;
-  tid: number;
-}
-
-interface PrefabStamp {
-  id: string;
-  nameFr: string;
-  nameEn: string;
-  w: number;
-  h: number;
-  cells: PrefabCell[];
-}
-
-const PREFAB_STAMPS: PrefabStamp[] = [
-  {
-    id: 'bridge_ns_90',
-    nameFr: 'Pont Nord-Sud 90° (3×4)',
-    nameEn: 'Vertical Bridge 90° (3×4)',
-    w: 3,
-    h: 4,
-    cells: [
-      { dx: 0, dy: 0, layer: 2, tid: 245 },
-      { dx: 1, dy: 0, layer: 1, tid: 286 },
-      { dx: 1, dy: 0, layer: 2, tid: 246 },
-      { dx: 2, dy: 0, layer: 2, tid: 247 },
-      { dx: 0, dy: 1, layer: 2, tid: 285 },
-      { dx: 1, dy: 1, layer: 1, tid: 286 },
-      { dx: 1, dy: 1, layer: 2, tid: -1 },
-      { dx: 2, dy: 1, layer: 2, tid: 287 },
-      { dx: 0, dy: 2, layer: 2, tid: 285 },
-      { dx: 1, dy: 2, layer: 1, tid: 286 },
-      { dx: 1, dy: 2, layer: 2, tid: -1 },
-      { dx: 2, dy: 2, layer: 2, tid: 287 },
-      { dx: 0, dy: 3, layer: 2, tid: 325 },
-      { dx: 1, dy: 3, layer: 1, tid: 286 },
-      { dx: 1, dy: 3, layer: 2, tid: 326 },
-      { dx: 2, dy: 3, layer: 2, tid: 327 },
-    ],
-  },
-  {
-    id: 'bridge_ns_span',
-    nameFr: 'Travée Pont Nord-Sud 90° (3×1)',
-    nameEn: 'Vertical Bridge Span (3×1)',
-    w: 3,
-    h: 1,
-    cells: [
-      { dx: 0, dy: 0, layer: 2, tid: 285 },
-      { dx: 1, dy: 0, layer: 1, tid: 286 },
-      { dx: 1, dy: 0, layer: 2, tid: -1 },
-      { dx: 2, dy: 0, layer: 2, tid: 287 },
-    ],
-  },
-  {
-    id: 'bridge_ew',
-    nameFr: 'Pont Est-Ouest (4×4)',
-    nameEn: 'Horizontal Bridge (4×4)',
-    w: 4,
-    h: 4,
-    cells: [
-      { dx: 0, dy: 0, layer: 2, tid: 248 },
-      { dx: 1, dy: 0, layer: 2, tid: 249 },
-      { dx: 2, dy: 0, layer: 2, tid: 249 },
-      { dx: 3, dy: 0, layer: 2, tid: 250 },
-      { dx: 0, dy: 1, layer: 1, tid: 289 },
-      { dx: 0, dy: 1, layer: 2, tid: 288 },
-      { dx: 1, dy: 1, layer: 1, tid: 289 },
-      { dx: 1, dy: 1, layer: 2, tid: -1 },
-      { dx: 2, dy: 1, layer: 1, tid: 289 },
-      { dx: 2, dy: 1, layer: 2, tid: -1 },
-      { dx: 3, dy: 1, layer: 1, tid: 289 },
-      { dx: 3, dy: 1, layer: 2, tid: 290 },
-      { dx: 0, dy: 2, layer: 1, tid: 289 },
-      { dx: 0, dy: 2, layer: 2, tid: 288 },
-      { dx: 1, dy: 2, layer: 1, tid: 289 },
-      { dx: 1, dy: 2, layer: 2, tid: -1 },
-      { dx: 2, dy: 2, layer: 1, tid: 289 },
-      { dx: 2, dy: 2, layer: 2, tid: -1 },
-      { dx: 3, dy: 2, layer: 1, tid: 289 },
-      { dx: 3, dy: 2, layer: 2, tid: 290 },
-      { dx: 0, dy: 3, layer: 2, tid: 328 },
-      { dx: 1, dy: 3, layer: 2, tid: 329 },
-      { dx: 2, dy: 3, layer: 2, tid: 329 },
-      { dx: 3, dy: 3, layer: 2, tid: 330 },
-    ],
-  },
-  {
-    id: 'tree_oak',
-    nameFr: 'Arbre Sylvestre à Tronc A (2×2)',
-    nameEn: 'Trunked Sylvan Oak A (2×2)',
-    w: 2,
-    h: 2,
-    cells: [
-      { dx: 0, dy: 0, layer: 3, tid: 3050 },
-      { dx: 1, dy: 0, layer: 3, tid: 3051 },
-      { dx: 0, dy: 1, layer: 2, tid: 3090 },
-      { dx: 1, dy: 1, layer: 2, tid: 3091 },
-    ],
-  },
-  {
-    id: 'tree_emerald',
-    nameFr: 'Chêne Sylvebrume à Tronc B (2×2)',
-    nameEn: 'Sylvebrume Trunked Tree B (2×2)',
-    w: 2,
-    h: 2,
-    cells: [
-      { dx: 0, dy: 0, layer: 3, tid: 3052 },
-      { dx: 1, dy: 0, layer: 3, tid: 3053 },
-      { dx: 0, dy: 1, layer: 2, tid: 3092 },
-      { dx: 1, dy: 1, layer: 2, tid: 3093 },
-    ],
-  },
-  {
-    id: 'tree_pine',
-    nameFr: 'Pin Forestier à Tronc C (2×2)',
-    nameEn: 'Forest Trunked Pine C (2×2)',
-    w: 2,
-    h: 2,
-    cells: [
-      { dx: 0, dy: 0, layer: 3, tid: 3056 },
-      { dx: 1, dy: 0, layer: 3, tid: 3057 },
-      { dx: 0, dy: 1, layer: 2, tid: 3096 },
-      { dx: 1, dy: 1, layer: 2, tid: 3097 },
-    ],
-  },
-  {
-    id: 'col_fluted',
-    nameFr: 'Colonne Cannelée Antique (1×3)',
-    nameEn: 'Fluted Temple Column (1×3)',
-    w: 1,
-    h: 3,
-    cells: [
-      { dx: 0, dy: 0, layer: 3, tid: 2205 },
-      { dx: 0, dy: 1, layer: 3, tid: 2245 },
-      { dx: 0, dy: 2, layer: 2, tid: 2285 },
-    ],
-  },
-  {
-    id: 'statue_astrelya',
-    nameFr: "Statue Marbre d'Astrelya (2×3)",
-    nameEn: 'Astrelya Marble Statue (2×3)',
-    w: 2,
-    h: 3,
-    cells: [
-      { dx: 0, dy: 0, layer: 3, tid: 1248 },
-      { dx: 1, dy: 0, layer: 3, tid: 1249 },
-      { dx: 0, dy: 1, layer: 2, tid: 1288 },
-      { dx: 1, dy: 1, layer: 2, tid: 1289 },
-      { dx: 0, dy: 2, layer: 2, tid: 1328 },
-      { dx: 1, dy: 2, layer: 2, tid: 1329 },
-    ],
-  },
-  {
-    id: 'statue_winged',
-    nameFr: 'Idole Ailée du Temple (2×2)',
-    nameEn: 'Winged Sanctuary Idol (2×2)',
-    w: 2,
-    h: 2,
-    cells: [
-      { dx: 0, dy: 0, layer: 3, tid: 1486 },
-      { dx: 1, dy: 0, layer: 3, tid: 1487 },
-      { dx: 0, dy: 1, layer: 2, tid: 1526 },
-      { dx: 1, dy: 1, layer: 2, tid: 1527 },
-    ],
-  },
-  {
-    id: 'statue_eclipse',
-    nameFr: "Idole Cornue de l'Éclipse (2×2)",
-    nameEn: 'Horned Eclipse Idol (2×2)',
-    w: 2,
-    h: 2,
-    cells: [
-      { dx: 0, dy: 0, layer: 3, tid: 1488 },
-      { dx: 1, dy: 0, layer: 3, tid: 1489 },
-      { dx: 0, dy: 1, layer: 2, tid: 1528 },
-      { dx: 1, dy: 1, layer: 2, tid: 1529 },
-    ],
-  },
-  {
-    id: 'statue_knight',
-    nameFr: 'Statue Chevalier Sentinelle (1×3)',
-    nameEn: 'Knight Sentinel Statue (1×3)',
-    w: 1,
-    h: 3,
-    cells: [
-      { dx: 0, dy: 0, layer: 3, tid: 930 },
-      { dx: 0, dy: 1, layer: 2, tid: 970 },
-      { dx: 0, dy: 2, layer: 2, tid: 1010 },
-    ],
-  },
-  {
-    id: 'carpet_royal',
-    nameFr: 'Tapis Royal Bordé 9-Slice (3×3)',
-    nameEn: 'Bordered Royal Carpet (3×3)',
-    w: 3,
-    h: 3,
-    cells: [
-      { dx: 0, dy: 0, layer: 1, tid: 2120 },
-      { dx: 1, dy: 0, layer: 1, tid: 2121 },
-      { dx: 2, dy: 0, layer: 1, tid: 2122 },
-      { dx: 0, dy: 1, layer: 1, tid: 2160 },
-      { dx: 1, dy: 1, layer: 1, tid: 2161 },
-      { dx: 2, dy: 1, layer: 1, tid: 2162 },
-      { dx: 0, dy: 2, layer: 1, tid: 2200 },
-      { dx: 1, dy: 2, layer: 1, tid: 2201 },
-      { dx: 2, dy: 2, layer: 1, tid: 2202 },
-    ],
-  },
-  {
-    id: 'stone_court',
-    nameFr: 'Dallage Pierre Bordé (3×3)',
-    nameEn: 'Bordered Stone Court (3×3)',
-    w: 3,
-    h: 3,
-    cells: [
-      { dx: 0, dy: 0, layer: 1, tid: 22 },
-      { dx: 1, dy: 0, layer: 1, tid: 23 },
-      { dx: 2, dy: 0, layer: 1, tid: 24 },
-      { dx: 0, dy: 1, layer: 1, tid: 62 },
-      { dx: 1, dy: 1, layer: 1, tid: 63 },
-      { dx: 2, dy: 1, layer: 1, tid: 64 },
-      { dx: 0, dy: 2, layer: 1, tid: 102 },
-      { dx: 1, dy: 2, layer: 1, tid: 103 },
-      { dx: 2, dy: 2, layer: 1, tid: 104 },
-    ],
-  },
-  {
-    id: 'rune_medallion',
-    nameFr: 'Médaillon Runique Obsidienne (2×2)',
-    nameEn: 'Obsidian Rune Medallion (2×2)',
-    w: 2,
-    h: 2,
-    cells: [
-      { dx: 0, dy: 0, layer: 1, tid: 2163 },
-      { dx: 1, dy: 0, layer: 1, tid: 2164 },
-      { dx: 0, dy: 1, layer: 1, tid: 2203 },
-      { dx: 1, dy: 1, layer: 1, tid: 2204 },
-    ],
-  },
-  {
-    id: 'banner_wall',
-    nameFr: 'Bannière Murale Complète (1×2)',
-    nameEn: 'Royal Wall Banner (1×2)',
-    w: 1,
-    h: 2,
-    cells: [
-      { dx: 0, dy: 0, layer: 2, tid: 1085 },
-      { dx: 0, dy: 1, layer: 2, tid: 1125 },
-    ],
-  },
-  {
-    id: 'brazier_fire',
-    nameFr: 'Brasero de Pierre Animé (1×1)',
-    nameEn: 'Animated Stone Brazier (1×1)',
-    w: 1,
-    h: 1,
-    cells: [{ dx: 0, dy: 0, layer: 2, tid: 2573 }],
-  },
-  {
-    id: 'torch_royal',
-    nameFr: 'Torche Royale sur Pied (1×1)',
-    nameEn: 'Standing Royal Torch (1×1)',
-    w: 1,
-    h: 1,
-    cells: [{ dx: 0, dy: 0, layer: 2, tid: 2576 }],
-  },
-];
+type EditorTool = 'autotile' | 'autotile_rect' | 'stamp' | 'brush' | 'eyedropper' | 'eraser';
 
 type InspectedTarget =
   | { kind: 'door'; door: DoorDef; idx: number }
@@ -350,8 +96,7 @@ function findSafeArrivalPoint(map: MapData, world: WorldBundle): { wx: number; w
   return { wx: Math.floor((map.w * 32) / 2), wy: Math.floor((map.h * 32) / 2) };
 }
 
-function triggerFileDownload(filename: string, content: string, mimeType: string) {
-  const blob = new Blob([content], { type: mimeType });
+function triggerBlobDownload(filename: string, blob: Blob) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -360,6 +105,25 @@ function triggerFileDownload(filename: string, content: string, mimeType: string
   a.click();
   document.body.removeChild(a);
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function ShapeThumb({
+  selection,
+  sprites,
+  tileCols,
+  maxBoxPx = 52,
+}: {
+  selection: UnifiedCatalogSelection | { kind: 'raw_tile'; tid: number };
+  sprites: SpriteBank;
+  tileCols: number;
+  maxBoxPx?: number;
+}) {
+  const ref = useRef<HTMLCanvasElement | null>(null);
+  useEffect(() => {
+    if (!ref.current) return;
+    renderShapePreviewCanvas(ref.current, selection, sprites, tileCols, maxBoxPx);
+  }, [selection, sprites, tileCols, maxBoxPx]);
+  return <canvas ref={ref} className="pixel-canvas block rounded border border-slate-800/80" />;
 }
 
 export function MapsAtlasView({
@@ -391,11 +155,15 @@ export function MapsAtlasView({
   const [showGrid, setShowGrid] = useState(false);
   const [inspected, setInspected] = useState<InspectedTarget | null>(null);
 
-  // Level Editor State
-  const [tool, setTool] = useState<EditorTool>('stamp');
-  const [activeLayer, setActiveLayer] = useState<0 | 1 | 2 | 3>(1);
-  const [selectedTileId, setSelectedTileId] = useState<number>(2161);
-  const [selectedStampId, setSelectedStampId] = useState<string>('bridge_ns_90');
+  // Level Editor State (Autotiling + Visual Shape Preview + Thematic Palette + Dropdown by Name)
+  const [tool, setTool] = useState<EditorTool>('autotile');
+  const [activeTheme, setActiveTheme] = useState<EditorThemeId>('autotile');
+  const [activeAutotileZone, setActiveAutotileZone] = useState<AutotileZoneId>('forest');
+  const [autotileErase, setAutotileErase] = useState<boolean>(false);
+  const [rectDragStart, setRectDragStart] = useState<{ tx: number; ty: number } | null>(null);
+  const [activeLayer, setActiveLayer] = useState<0 | 1 | 2 | 3>(2);
+  const [selectedTileId, setSelectedTileId] = useState<number>(642);
+  const [selectedStampId, setSelectedStampId] = useState<string>('tree_oak');
   const [eraseAllUpper, setEraseAllUpper] = useState<boolean>(false);
   const [hoverCell, setHoverCell] = useState<{ tx: number; ty: number } | null>(null);
   const [undoStack, setUndoStack] = useState<WorldBundle[]>([]);
@@ -411,10 +179,42 @@ export function MapsAtlasView({
     [selectedStampId]
   );
 
+  const activeAutotileBrush = useMemo(
+    () => AUTOTILE_BRUSHES.find((b) => b.id === activeAutotileZone) || AUTOTILE_BRUSHES[0],
+    [activeAutotileZone]
+  );
+
   const maxTileId = useMemo(() => {
     const rows = Math.floor((sprites.tileset.height || 3040) / 32);
     return rows * world.tileCols - 1;
   }, [sprites.tileset.height, world.tileCols]);
+
+  // Unified dropdown value so choosing by name OR clicking in the thematic palette stay in sync
+  const dropdownSelectValue = useMemo(() => {
+    if (tool === 'autotile' || tool === 'autotile_rect') {
+      return `auto:${activeAutotileZone}`;
+    }
+    if (tool === 'stamp') {
+      return `stamp:${activeStamp.id}`;
+    }
+    const matchingThemeTile = THEMATIC_TILES.find((t) => t.tid === selectedTileId);
+    if (matchingThemeTile) {
+      return `tile:${matchingThemeTile.id}`;
+    }
+    return `auto:${activeAutotileZone}`;
+  }, [tool, activeAutotileZone, activeStamp.id, selectedTileId]);
+
+  const currentPreviewSelection = useMemo<
+    UnifiedCatalogSelection | { kind: 'raw_tile'; tid: number }
+  >(() => {
+    if (tool === 'autotile' || tool === 'autotile_rect') {
+      return { kind: 'autotile', zone: activeAutotileZone, brush: activeAutotileBrush };
+    }
+    if (tool === 'stamp') {
+      return { kind: 'stamp', stamp: activeStamp };
+    }
+    return { kind: 'raw_tile', tid: selectedTileId };
+  }, [tool, activeAutotileZone, activeAutotileBrush, activeStamp, selectedTileId]);
 
   // Prebuild 32x32 crimson collision overlay canvases for masked tiles
   const maskOverlays = useMemo(() => {
@@ -458,21 +258,21 @@ export function MapsAtlasView({
   useEffect(() => {
     setInspected(null);
     setHoverCell(null);
+    setRectDragStart(null);
   }, [activeMap.name]);
 
   const showTimedNotice = useCallback((msg: string) => {
     setEditorNotice(msg);
     window.setTimeout(() => {
       setEditorNotice((prev) => (prev === msg ? null : prev));
-    }, 3200);
+    }, 3600);
   }, []);
 
-  // Render Tileset Palette Picker when in Edit Mode + Brush tool
+  // Render full 40-column Tileset Sheet Drawer when in Edit Mode + Brush tool
   useEffect(() => {
     if (mode !== 'edit' || tool !== 'brush') return;
     const pCanvas = paletteCanvasRef.current;
     if (!pCanvas) return;
-    const scale = 0.5; // 16px per tile -> 40 * 16 = 640px wide
     const cols = world.tileCols;
     const rows = Math.floor((sprites.tileset.height || 3040) / 32);
     pCanvas.width = cols * 16;
@@ -482,17 +282,7 @@ export function MapsAtlasView({
     ctx.imageSmoothingEnabled = false;
     ctx.fillStyle = '#090d14';
     ctx.fillRect(0, 0, pCanvas.width, pCanvas.height);
-    ctx.drawImage(
-      sprites.tileset,
-      0,
-      0,
-      cols * 32,
-      rows * 32,
-      0,
-      0,
-      cols * 32 * scale,
-      rows * 32 * scale
-    );
+    ctx.drawImage(sprites.tileset, 0, 0, cols * 32, rows * 32, 0, 0, cols * 16, rows * 16);
 
     if (selectedTileId >= 0) {
       const sx = (selectedTileId % cols) * 16;
@@ -535,7 +325,6 @@ export function MapsAtlasView({
       return { x: n.x, y: n.y };
     };
 
-    // Layers 0..2 + Controlled Stone-Pot Braziers (2573) & Standing Royal Torches (2576)
     for (let ty = 0; ty < activeMap.h; ty++) {
       const dy = ty * tilePx;
       for (let tx = 0; tx < activeMap.w; tx++) {
@@ -564,7 +353,6 @@ export function MapsAtlasView({
       }
     }
 
-    // Loot: Complete 2-tile Chests, Steles & Ground Items
     if (showLoot) {
       for (const c of activeMap.chests) {
         const opened = Boolean(progress.openedChests[c.id]);
@@ -600,7 +388,6 @@ export function MapsAtlasView({
       }
     }
 
-    // Bespoke Gilded Royal Throne on Chateau Dais
     if (activeMap.name === 'chateau' && sprites.throne) {
       ctx.drawImage(
         sprites.throne,
@@ -611,7 +398,6 @@ export function MapsAtlasView({
       );
     }
 
-    // NPCs (departed blockade guards are hidden in gameplay & inspector, or shown translucent in editor)
     if (showNpcs) {
       for (const n of activeMap.npcs) {
         const present = isNpcPresent(progress, n);
@@ -624,9 +410,7 @@ export function MapsAtlasView({
         const nx = Math.round(pos.x * scale);
         const ny = Math.round(pos.y * scale);
         ctx.save();
-        if (!present) {
-          ctx.globalAlpha = 0.35;
-        }
+        if (!present) ctx.globalAlpha = 0.35;
         ctx.drawImage(spr, nx, ny - Math.round(4 * scale), nw, nh);
         ctx.strokeStyle = present ? '#34d399' : '#94a3b8';
         ctx.lineWidth = Math.max(1.5, scale * 1.3);
@@ -635,7 +419,6 @@ export function MapsAtlasView({
       }
     }
 
-    // Monsters & Bosses
     if (showMonsters) {
       for (const sp of activeMap.spawns) {
         const anim = sprites.monsters[sp.type];
@@ -653,7 +436,6 @@ export function MapsAtlasView({
       }
     }
 
-    // Foreground Layer 3
     if (showCanopy) {
       for (let ty = 0; ty < activeMap.h; ty++) {
         const dy = ty * tilePx;
@@ -664,7 +446,6 @@ export function MapsAtlasView({
       }
     }
 
-    // 1-bit Pixel Collision Overlay
     if (showCollisions) {
       for (let ty = 0; ty < activeMap.h; ty++) {
         const dy = ty * tilePx;
@@ -674,15 +455,12 @@ export function MapsAtlasView({
             const tid = activeMap.layers[l][ty][tx];
             if (tid < 0) continue;
             const ov = maskOverlays.get(tid);
-            if (ov) {
-              ctx.drawImage(ov, 0, 0, 32, 32, dx, dy, tilePx, tilePx);
-            }
+            if (ov) ctx.drawImage(ov, 0, 0, 32, 32, dx, dy, tilePx, tilePx);
           }
         }
       }
     }
 
-    // Optional Tile Grid (active when toggled or in Edit mode)
     if (showGrid || mode === 'edit') {
       ctx.strokeStyle = 'rgba(148, 163, 184, 0.16)';
       ctx.lineWidth = 1;
@@ -702,7 +480,6 @@ export function MapsAtlasView({
       }
     }
 
-    // Doors / Portals Overlay
     if (showDoors) {
       activeMap.doors.forEach((d, idx) => {
         const locked = !isFlagUnlocked(progress, d.reqFlag);
@@ -724,40 +501,64 @@ export function MapsAtlasView({
       });
     }
 
-    // Live Editor Hover Preview Footprint
+    // Live Editor Footprint / Rectangle Zone Preview
     if (mode === 'edit' && hoverCell) {
-      const footW = tool === 'stamp' ? activeStamp.w : 1;
-      const footH = tool === 'stamp' ? activeStamp.h : 1;
-      if (tool === 'stamp') {
-        ctx.save();
-        ctx.globalAlpha = 0.72;
-        for (const c of activeStamp.cells) {
-          const tx = hoverCell.tx + c.dx;
-          const ty = hoverCell.ty + c.dy;
-          if (tx < 0 || ty < 0 || tx >= activeMap.w || ty >= activeMap.h) continue;
-          if (c.tid >= 0) {
-            drawTile(c.tid, tx * tilePx, ty * tilePx);
+      if (tool === 'autotile_rect' && rectDragStart) {
+        const x0 = Math.min(rectDragStart.tx, hoverCell.tx);
+        const y0 = Math.min(rectDragStart.ty, hoverCell.ty);
+        const x1 = Math.max(rectDragStart.tx, hoverCell.tx);
+        const y1 = Math.max(rectDragStart.ty, hoverCell.ty);
+        ctx.fillStyle = autotileErase
+          ? 'rgba(244, 63, 94, 0.22)'
+          : 'rgba(251, 191, 36, 0.22)';
+        ctx.fillRect(x0 * tilePx, y0 * tilePx, (x1 - x0 + 1) * tilePx, (y1 - y0 + 1) * tilePx);
+        ctx.strokeStyle = autotileErase ? '#fb7185' : '#fbbf24';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(
+          x0 * tilePx + 1,
+          y0 * tilePx + 1,
+          (x1 - x0 + 1) * tilePx - 2,
+          (y1 - y0 + 1) * tilePx - 2
+        );
+      } else {
+        const footW = tool === 'stamp' ? activeStamp.w : 1;
+        const footH = tool === 'stamp' ? activeStamp.h : 1;
+        if (tool === 'stamp') {
+          ctx.save();
+          ctx.globalAlpha = 0.72;
+          for (const c of activeStamp.cells) {
+            const tx = hoverCell.tx + c.dx;
+            const ty = hoverCell.ty + c.dy;
+            if (tx < 0 || ty < 0 || tx >= activeMap.w || ty >= activeMap.h) continue;
+            if (c.tid >= 0) drawTile(c.tid, tx * tilePx, ty * tilePx);
           }
+          ctx.restore();
+        } else if (tool === 'brush' && selectedTileId >= 0) {
+          ctx.save();
+          ctx.globalAlpha = 0.72;
+          drawTile(selectedTileId, hoverCell.tx * tilePx, hoverCell.ty * tilePx);
+          ctx.restore();
+        } else if (tool === 'autotile' && !autotileErase) {
+          ctx.save();
+          ctx.globalAlpha = 0.72;
+          drawTile(activeAutotileBrush.preview3x3[1][1], hoverCell.tx * tilePx, hoverCell.ty * tilePx);
+          ctx.restore();
         }
-        ctx.restore();
-      } else if (tool === 'brush' && selectedTileId >= 0) {
-        ctx.save();
-        ctx.globalAlpha = 0.72;
-        drawTile(selectedTileId, hoverCell.tx * tilePx, hoverCell.ty * tilePx);
-        ctx.restore();
-      }
 
-      ctx.strokeStyle = tool === 'eraser' ? '#fb7185' : '#fbbf24';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(
-        hoverCell.tx * tilePx + 1,
-        hoverCell.ty * tilePx + 1,
-        footW * tilePx - 2,
-        footH * tilePx - 2
-      );
+        ctx.strokeStyle =
+          tool === 'eraser' || ((tool === 'autotile' || tool === 'autotile_rect') && autotileErase)
+            ? '#fb7185'
+            : '#fbbf24';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(
+          hoverCell.tx * tilePx + 1,
+          hoverCell.ty * tilePx + 1,
+          footW * tilePx - 2,
+          footH * tilePx - 2
+        );
+      }
     }
 
-    // Player Current Marker if on this map
     if (progress.currentMap === activeMap.name) {
       const px = Math.round(progress.wx * scale);
       const py = Math.round(progress.wy * scale);
@@ -778,6 +579,9 @@ export function MapsAtlasView({
     mode,
     tool,
     activeStamp,
+    activeAutotileBrush,
+    autotileErase,
+    rectDragStart,
     selectedTileId,
     hoverCell,
     showDoors,
@@ -833,6 +637,20 @@ export function MapsAtlasView({
         ...world,
         maps: world.maps.map((m) => {
           if (m.name !== activeMap.name) return m;
+          if (tool === 'autotile') {
+            const nextLayers = applyAutotileRectToLayers(
+              m.layers,
+              m.w,
+              m.h,
+              activeAutotileZone,
+              tx,
+              ty,
+              tx,
+              ty,
+              autotileErase
+            );
+            return { ...m, layers: nextLayers };
+          }
           const nextLayers = m.layers.map((layer) => layer.map((row) => [...row]));
           if (tool === 'stamp') {
             for (const c of activeStamp.cells) {
@@ -863,6 +681,8 @@ export function MapsAtlasView({
       tool,
       activeMap,
       world,
+      activeAutotileZone,
+      autotileErase,
       activeStamp,
       activeLayer,
       selectedTileId,
@@ -932,6 +752,10 @@ export function MapsAtlasView({
       return;
     }
     isPaintingRef.current = true;
+    if (tool === 'autotile_rect') {
+      setRectDragStart({ tx: pos.tx, ty: pos.ty });
+      return;
+    }
     lastPaintedCellRef.current = `${pos.tx},${pos.ty}`;
     applyEditAt(pos.tx, pos.ty, true);
   };
@@ -945,7 +769,7 @@ export function MapsAtlasView({
     if (
       mode === 'edit' &&
       isPaintingRef.current &&
-      (tool === 'brush' || tool === 'eraser')
+      (tool === 'autotile' || tool === 'brush' || tool === 'eraser')
     ) {
       const key = `${pos.tx},${pos.ty}`;
       if (lastPaintedCellRef.current !== key) {
@@ -955,9 +779,34 @@ export function MapsAtlasView({
     }
   };
 
-  const handleMouseUpOrLeave = () => {
+  const handleMouseUp = () => {
+    if (mode === 'edit' && isPaintingRef.current && tool === 'autotile_rect' && rectDragStart && hoverCell) {
+      setUndoStack((prev) => [...prev.slice(-29), structuredClone(world)]);
+      const nextWorld: WorldBundle = {
+        ...world,
+        maps: world.maps.map((m) => {
+          if (m.name !== activeMap.name) return m;
+          return {
+            ...m,
+            layers: applyAutotileRectToLayers(
+              m.layers,
+              m.w,
+              m.h,
+              activeAutotileZone,
+              rectDragStart.tx,
+              rectDragStart.ty,
+              hoverCell.tx,
+              hoverCell.ty,
+              autotileErase
+            ),
+          };
+        }),
+      };
+      onUpdateWorld(nextWorld);
+    }
     isPaintingRef.current = false;
     lastPaintedCellRef.current = null;
+    setRectDragStart(null);
   };
 
   const handlePaletteClick = (e: MouseEvent<HTMLCanvasElement>) => {
@@ -972,6 +821,51 @@ export function MapsAtlasView({
     if (tid >= 0 && tid <= maxTileId) {
       setSelectedTileId(tid);
     }
+  };
+
+  const handleDropdownCatalogChange = (val: string) => {
+    const [kind, id] = val.split(':');
+    if (kind === 'auto') {
+      const z = id as AutotileZoneId;
+      setActiveAutotileZone(z);
+      setActiveTheme('autotile');
+      if (tool !== 'autotile_rect') setTool('autotile');
+    } else if (kind === 'stamp') {
+      const st = PREFAB_STAMPS.find((s) => s.id === id);
+      if (st) {
+        setSelectedStampId(st.id);
+        setActiveTheme(st.theme);
+        setTool('stamp');
+      }
+    } else if (kind === 'tile') {
+      const ti = THEMATIC_TILES.find((t) => t.id === id);
+      if (ti) {
+        setSelectedTileId(ti.tid);
+        setActiveLayer(ti.recommendedLayer);
+        setActiveTheme(ti.theme);
+        setTool('brush');
+      }
+    }
+  };
+
+  const handleRepairMapAutotile = () => {
+    setUndoStack((prev) => [...prev.slice(-29), structuredClone(world)]);
+    let totalFixed = 0;
+    const nextWorld: WorldBundle = {
+      ...world,
+      maps: world.maps.map((m) => {
+        if (m.name !== activeMap.name) return m;
+        const res = repairMapAutotiling(m);
+        totalFixed = res.fixedCount;
+        return res.map;
+      }),
+    };
+    onUpdateWorld(nextWorld);
+    showTimedNotice(
+      lang === 'fr'
+        ? `Auto-tiling recalculé sur « ${activeMap.titleFr} » (${totalFixed} raccords ajustés).`
+        : `Recomputed autotiling on "${activeMap.titleEn}" (${totalFixed} transitions refined).`
+    );
   };
 
   const handleUndo = () => {
@@ -999,8 +893,10 @@ export function MapsAtlasView({
   };
 
   const handleExportWorldJson = () => {
-    const json = JSON.stringify(world);
-    triggerFileDownload('world_expanded.json', json, 'application/json');
+    triggerBlobDownload(
+      'world_expanded.json',
+      new Blob([JSON.stringify(world)], { type: 'application/json' })
+    );
     showTimedNotice(
       lang === 'fr'
         ? 'Fichier world_expanded.json exporté (à placer dans public/ethynd/world_expanded.json).'
@@ -1008,13 +904,39 @@ export function MapsAtlasView({
     );
   };
 
-  const handleExportStandaloneHtml = () => {
-    const html = exportStandaloneSimulationHtml(world, sprites, progress, lang);
-    triggerFileDownload('ethynd_chroniques_standalone.html', html, 'text/html;charset=utf-8');
+  const handleExportStandaloneEditorHtml = () => {
+    const html = exportStandaloneEditorHtml(world, sprites, lang);
+    triggerBlobDownload(
+      'editeur_niveaux_ethynd.html',
+      new Blob([html], { type: 'text/html;charset=utf-8' })
+    );
     showTimedNotice(
       lang === 'fr'
-        ? 'Page web autonome (.html) exportée avec les 11 cartes actuelles (compatible GitHub Pages).'
-        : 'Exported self-contained standalone .html page with all 11 current maps (GitHub Pages ready).'
+        ? 'Éditeur de niveaux HTML autonome exporté (fichier unique .html avec tuiles, auto-tiling et palette thématique intégrés).'
+        : 'Exported self-contained HTML Level Editor (.html with embedded tileset, autotiling, and thematic palette).'
+    );
+  };
+
+  const handleExportStandaloneGameHtml = () => {
+    const html = exportStandaloneSimulationHtml(world, sprites, progress, lang);
+    triggerBlobDownload(
+      'ethynd_chroniques_standalone.html',
+      new Blob([html], { type: 'text/html;charset=utf-8' })
+    );
+    showTimedNotice(
+      lang === 'fr'
+        ? 'Jeu complet HTML autonome exporté avec vos 11 niveaux actuels.'
+        : 'Exported self-contained standalone HTML game with all 11 current maps.'
+    );
+  };
+
+  const handleExportAkaZip = () => {
+    const zipBlob = exportGamebuinoAkaPackZip(world, sprites);
+    triggerBlobDownload('ethynd_gamebuino_aka_pack.zip', zipBlob);
+    showTimedNotice(
+      lang === 'fr'
+        ? 'Pack Gamebuino AKA exporté : Firmware C++ (.ino) + SD_CARD/ETHYND/ (WORLD.BIN, TILESET.565, SPRITES.565).'
+        : 'Exported Gamebuino AKA Pack: C++ Firmware (.ino) + SD_CARD/ETHYND/ (WORLD.BIN, TILESET.565, SPRITES.565).'
     );
   };
 
@@ -1060,7 +982,7 @@ export function MapsAtlasView({
         <div>
           <h1 className="font-display text-2xl font-bold text-white">
             {lang === 'fr'
-              ? "Atlas & Éditeur de Niveaux d'Ethynd (11 Régions)"
+              ? "Atlas & Éditeur de Niveaux d'Ethynd (Auto-Tiling · HTML · Gamebuino AKA)"
               : 'Cartographic Atlas & Level Editor of Ethynd'}
           </h1>
           <p className="text-sm text-slate-400 mt-1 tabular-nums">
@@ -1072,7 +994,6 @@ export function MapsAtlasView({
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          {/* Segmented Inspector / Level Editor Mode Switch */}
           <div className="flex items-center gap-1 p-1 bg-slate-900 rounded-lg border border-slate-800">
             <button
               type="button"
@@ -1129,7 +1050,7 @@ export function MapsAtlasView({
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Left Column: 11 Map Selector + Export Actions */}
+        {/* Left Column: 11 Map Selector + HTML Editor / Gamebuino AKA / JSON Exports */}
         <aside className="lg:col-span-3 space-y-4">
           <div className="p-4 rounded-xl bg-[#141a24] border border-slate-800/90 divide-y divide-slate-800/70">
             {world.maps.map((m, idx) => {
@@ -1166,32 +1087,50 @@ export function MapsAtlasView({
             })}
           </div>
 
-          {/* Export / Import / GitHub Sync Box */}
+          {/* Export Suite: Standalone HTML Editor + Gamebuino AKA Pack + World JSON */}
           <div className="p-4 rounded-xl bg-[#141a24] border border-slate-800/90 space-y-2.5">
             <h2 className="text-xs font-semibold text-slate-200">
               {lang === 'fr'
-                ? 'Exportation des niveaux & Pages Web'
-                : 'Level Bundle & Web Page Export'}
+                ? 'Éditeur HTML Autonome, Gamebuino AKA & GitHub'
+                : 'HTML Editor, Gamebuino AKA & GitHub Export'}
             </h2>
             <p className="text-xs text-slate-400 leading-relaxed">
               {lang === 'fr'
-                ? 'Exportez vos niveaux modifiés en JSON pour le dépôt GitHub, ou générez une page HTML autonome prête pour GitHub Pages.'
-                : 'Export edited levels as JSON for your GitHub repository, or build a single-file HTML page ready for GitHub Pages.'}
+                ? "L'éditeur reste disponible en fichier HTML pur (public/ethynd/editeur_niveaux.html) et exporte directement la cible matérielle Gamebuino AKA."
+                : 'Keep the level editor as a pure standalone HTML file and export binary SD assets + C++ firmware for Gamebuino AKA.'}
             </p>
             <div className="flex flex-col gap-2 pt-1">
               <button
                 type="button"
-                onClick={handleExportWorldJson}
+                onClick={handleExportStandaloneEditorHtml}
                 className="w-full px-3 py-2 text-xs font-semibold rounded-lg bg-amber-500 text-slate-950 hover:bg-amber-400 transition-colors whitespace-nowrap cursor-pointer"
+              >
+                {lang === 'fr'
+                  ? 'Exporter Éditeur HTML Autonome (.html)'
+                  : 'Export Standalone HTML Editor (.html)'}
+              </button>
+              <button
+                type="button"
+                onClick={handleExportAkaZip}
+                className="w-full px-3 py-2 text-xs font-semibold rounded-lg bg-sky-500/20 text-sky-200 hover:bg-sky-500/30 border border-sky-400/50 transition-colors whitespace-nowrap cursor-pointer"
+              >
+                {lang === 'fr'
+                  ? 'Exporter Pack Gamebuino AKA (.zip)'
+                  : 'Export Gamebuino AKA Pack (.zip)'}
+              </button>
+              <button
+                type="button"
+                onClick={handleExportWorldJson}
+                className="w-full px-3 py-2 text-xs font-semibold rounded-lg bg-slate-800 text-slate-100 hover:bg-slate-700 border border-slate-700 transition-colors whitespace-nowrap cursor-pointer"
               >
                 {lang === 'fr' ? 'Exporter world_expanded.json' : 'Export world_expanded.json'}
               </button>
               <button
                 type="button"
-                onClick={handleExportStandaloneHtml}
-                className="w-full px-3 py-2 text-xs font-semibold rounded-lg bg-slate-800 text-slate-100 hover:bg-slate-700 border border-slate-700 transition-colors whitespace-nowrap cursor-pointer"
+                onClick={handleExportStandaloneGameHtml}
+                className="w-full px-3 py-2 text-xs font-medium rounded-lg bg-slate-900 text-slate-200 hover:text-white border border-slate-800 transition-colors whitespace-nowrap cursor-pointer"
               >
-                {lang === 'fr' ? 'Exporter Page HTML Autonome' : 'Export Standalone HTML Page'}
+                {lang === 'fr' ? 'Exporter Jeu HTML Autonome' : 'Export Standalone HTML Game'}
               </button>
               <button
                 type="button"
@@ -1218,48 +1157,13 @@ export function MapsAtlasView({
             <div className="flex flex-wrap items-center justify-between gap-4 pb-4 mb-4 border-b border-slate-800/80">
               <div className="flex flex-wrap items-center gap-2">
                 {[
-                  {
-                    active: showDoors,
-                    toggle: () => setShowDoors((v) => !v),
-                    fr: 'Passages',
-                    en: 'Doors',
-                  },
-                  {
-                    active: showNpcs,
-                    toggle: () => setShowNpcs((v) => !v),
-                    fr: 'PNJ',
-                    en: 'NPCs',
-                  },
-                  {
-                    active: showMonsters,
-                    toggle: () => setShowMonsters((v) => !v),
-                    fr: 'Bestiaire',
-                    en: 'Monsters',
-                  },
-                  {
-                    active: showLoot,
-                    toggle: () => setShowLoot((v) => !v),
-                    fr: 'Coffres & Stèles',
-                    en: 'Chests & Steles',
-                  },
-                  {
-                    active: showCanopy,
-                    toggle: () => setShowCanopy((v) => !v),
-                    fr: 'Toits / Canopée (L3)',
-                    en: 'Canopy (L3)',
-                  },
-                  {
-                    active: showCollisions,
-                    toggle: () => setShowCollisions((v) => !v),
-                    fr: 'Collisions 1-bit',
-                    en: 'Collision Masks',
-                  },
-                  {
-                    active: showGrid || mode === 'edit',
-                    toggle: () => setShowGrid((v) => !v),
-                    fr: 'Grille',
-                    en: 'Grid',
-                  },
+                  { active: showDoors, toggle: () => setShowDoors((v) => !v), fr: 'Passages', en: 'Doors' },
+                  { active: showNpcs, toggle: () => setShowNpcs((v) => !v), fr: 'PNJ', en: 'NPCs' },
+                  { active: showMonsters, toggle: () => setShowMonsters((v) => !v), fr: 'Bestiaire', en: 'Monsters' },
+                  { active: showLoot, toggle: () => setShowLoot((v) => !v), fr: 'Coffres & Stèles', en: 'Chests & Steles' },
+                  { active: showCanopy, toggle: () => setShowCanopy((v) => !v), fr: 'Canopée (L3)', en: 'Canopy (L3)' },
+                  { active: showCollisions, toggle: () => setShowCollisions((v) => !v), fr: 'Collisions 1-bit', en: 'Collision Masks' },
+                  { active: showGrid || mode === 'edit', toggle: () => setShowGrid((v) => !v), fr: 'Grille', en: 'Grid' },
                 ].map((ctrl) => (
                   <button
                     key={ctrl.fr}
@@ -1301,18 +1205,19 @@ export function MapsAtlasView({
               </div>
             </div>
 
-            {/* Level Editor Controls Bar (when in Edit mode) */}
+            {/* Level Editor Controls Bar (Autotiling + Visual Shape Preview + Thematic Palette) */}
             {mode === 'edit' && (
-              <div className="pb-4 mb-4 border-b border-slate-800/80 space-y-3">
+              <div className="pb-4 mb-4 border-b border-slate-800/80 space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  {/* Editor Tool Selector */}
                   <div className="flex flex-wrap items-center gap-1.5">
                     {(
                       [
-                        { id: 'stamp', fr: 'Préfabriqués (Ponts / Arbres / Statues)', en: 'Prefab Stamps' },
-                        { id: 'brush', fr: 'Pinceau Tuile', en: 'Tile Brush' },
+                        { id: 'autotile', fr: 'Auto-Tiling (Pinceau)', en: 'Auto-Tile Brush' },
+                        { id: 'autotile_rect', fr: 'Auto-Tiling (Rectangle)', en: 'Auto-Tile Zone Rect' },
+                        { id: 'stamp', fr: 'Préfabriqué', en: 'Prefab Stamp' },
+                        { id: 'brush', fr: 'Tuile Unique', en: 'Single Tile' },
                         { id: 'eyedropper', fr: 'Pipette', en: 'Eyedropper' },
-                        { id: 'eraser', fr: 'Gomme (-1)', en: 'Eraser (-1)' },
+                        { id: 'eraser', fr: 'Gomme', en: 'Eraser' },
                       ] as const
                     ).map((t) => (
                       <button
@@ -1330,52 +1235,152 @@ export function MapsAtlasView({
                     ))}
                   </div>
 
-                  {/* Undo & Reset Map */}
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleRepairMapAutotile}
+                      className="px-3 py-1.5 text-xs font-medium rounded-md border border-emerald-500/40 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20 whitespace-nowrap shrink-0 cursor-pointer"
+                    >
+                      {lang === 'fr' ? 'Réparer Auto-Tiling Carte' : 'Repair Map Autotiling'}
+                    </button>
                     <button
                       type="button"
                       disabled={undoStack.length === 0}
                       onClick={handleUndo}
                       className="px-3 py-1.5 text-xs font-medium rounded-md border border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap shrink-0 cursor-pointer tabular-nums"
                     >
-                      {lang === 'fr'
-                        ? `Annuler (${undoStack.length})`
-                        : `Undo (${undoStack.length})`}
+                      {lang === 'fr' ? `Annuler (${undoStack.length})` : `Undo (${undoStack.length})`}
                     </button>
                     <button
                       type="button"
                       onClick={handleResetActiveMap}
                       className="px-3 py-1.5 text-xs font-medium rounded-md border border-rose-500/40 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20 whitespace-nowrap shrink-0 cursor-pointer"
                     >
-                      {lang === 'fr' ? 'Réinitialiser la carte' : 'Reset Map'}
+                      {lang === 'fr' ? 'Réinitialiser' : 'Reset Map'}
                     </button>
                   </div>
                 </div>
 
-                {/* Contextual Sub-Bar: Prefab Stamp Selector OR Layer + Tile ID Controls */}
-                {tool === 'stamp' ? (
-                  <div className="flex flex-wrap items-center gap-2">
-                    <label className="text-xs text-slate-400 whitespace-nowrap">
-                      {lang === 'fr' ? 'Élément à poser :' : 'Active Prefab:'}
+                {/* Row 2: Dropdown Choice by Name + Live Shape Preview Box */}
+                <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-center p-3 rounded-lg bg-[#0d121b] border border-slate-800">
+                  <div className="xl:col-span-6 space-y-1.5">
+                    <label className="block text-xs font-semibold text-slate-300">
+                      {lang === 'fr'
+                        ? 'Choix rapide par le nom (Zones Auto-Tilées, Préfabriqués & Tuiles) :'
+                        : 'Quick Select by Name (Auto-Tiled Zones, Prefabs & Tiles):'}
                     </label>
                     <select
-                      value={selectedStampId}
-                      onChange={(e) => setSelectedStampId(e.target.value)}
-                      className="px-3 py-1.5 text-xs rounded-md bg-slate-900 border border-slate-700 text-slate-100 focus:outline-none focus:border-amber-400"
+                      value={dropdownSelectValue}
+                      onChange={(e) => handleDropdownCatalogChange(e.target.value)}
+                      className="w-full px-3 py-2 text-xs rounded-md bg-slate-900 border border-slate-700 text-slate-100 focus:outline-none focus:border-amber-400"
                     >
-                      {PREFAB_STAMPS.map((st) => (
-                        <option key={st.id} value={st.id}>
-                          {lang === 'fr' ? st.nameFr : st.nameEn}
-                        </option>
-                      ))}
+                      <optgroup
+                        label={
+                          lang === 'fr'
+                            ? 'Zones Auto-Tilées (Angles & Raccords Automatiques)'
+                            : 'Auto-Tiled Zones (Automatic Corners & Transitions)'
+                        }
+                      >
+                        {AUTOTILE_BRUSHES.map((b) => (
+                          <option key={b.id} value={`auto:${b.id}`}>
+                            {lang === 'fr' ? b.nameFr : b.nameEn}
+                          </option>
+                        ))}
+                      </optgroup>
+                      <optgroup
+                        label={
+                          lang === 'fr'
+                            ? 'Préfabriqués Multi-Tuiles (Ponts, Arbres, Statues, Tapis)'
+                            : 'Multi-Tile Prefabs (Bridges, Trees, Statues, Carpets)'
+                        }
+                      >
+                        {PREFAB_STAMPS.map((st) => (
+                          <option key={st.id} value={`stamp:${st.id}`}>
+                            {lang === 'fr' ? st.nameFr : st.nameEn}
+                          </option>
+                        ))}
+                      </optgroup>
+                      <optgroup
+                        label={
+                          lang === 'fr'
+                            ? 'Tuiles Individuelles par Thème'
+                            : 'Individual Thematic Tiles'
+                        }
+                      >
+                        {THEMATIC_TILES.map((ti) => (
+                          <option key={ti.id} value={`tile:${ti.id}`}>
+                            {lang === 'fr' ? ti.nameFr : ti.nameEn}
+                          </option>
+                        ))}
+                      </optgroup>
                     </select>
-                    <span className="text-xs text-slate-400 tabular-nums">
-                      {lang === 'fr'
-                        ? `Empreinte ${activeStamp.w}×${activeStamp.h} tuiles · Placement multi-couches automatique (L1/L2/L3)`
-                        : `Footprint ${activeStamp.w}×${activeStamp.h} tiles · Automatic multi-layer placement (L1/L2/L3)`}
-                    </span>
                   </div>
-                ) : (
+
+                  {/* Visual Shape Preview of Active Selection */}
+                  <div className="xl:col-span-6 flex items-center gap-3.5">
+                    <div className="shrink-0">
+                      <ShapeThumb
+                        selection={currentPreviewSelection}
+                        sprites={sprites}
+                        tileCols={world.tileCols}
+                        maxBoxPx={64}
+                      />
+                    </div>
+                    <div className="min-w-0 space-y-1">
+                      <p className="text-xs font-semibold text-amber-300 truncate">
+                        {tool === 'autotile' || tool === 'autotile_rect'
+                          ? lang === 'fr'
+                            ? activeAutotileBrush.nameFr
+                            : activeAutotileBrush.nameEn
+                          : tool === 'stamp'
+                          ? lang === 'fr'
+                            ? activeStamp.nameFr
+                            : activeStamp.nameEn
+                          : lang === 'fr'
+                          ? `Tuile #${selectedTileId} (Couche L${activeLayer})`
+                          : `Tile #${selectedTileId} (Layer L${activeLayer})`}
+                      </p>
+                      <p className="text-[11px] text-slate-400 leading-snug">
+                        {tool === 'autotile' || tool === 'autotile_rect'
+                          ? lang === 'fr'
+                            ? activeAutotileBrush.descFr
+                            : activeAutotileBrush.descEn
+                          : tool === 'stamp'
+                          ? lang === 'fr'
+                            ? `Aperçu exact ${activeStamp.w}×${activeStamp.h} tuiles · Placement multi-couches automatique`
+                            : `Exact ${activeStamp.w}×${activeStamp.h} shape preview · Automatic multi-layer placement`
+                          : maskOverlays.has(selectedTileId)
+                          ? lang === 'fr'
+                            ? 'Forme 32×32 px · Collision 1-bit active'
+                            : '32×32 px shape · Solid 1-bit collision'
+                          : lang === 'fr'
+                          ? 'Forme 32×32 px · Tuile praticable'
+                          : '32×32 px shape · Walkable tile'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Contextual Controls for Autotile Erase / Layer / Single Tile ID */}
+                {(tool === 'autotile' || tool === 'autotile_rect') && (
+                  <div className="flex flex-wrap items-center gap-4 text-xs">
+                    <label className="flex items-center gap-2 text-slate-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={autotileErase}
+                        onChange={(e) => setAutotileErase(e.target.checked)}
+                        className="accent-rose-500"
+                      />
+                      <span>
+                        {lang === 'fr'
+                          ? 'Mode Gomme Auto-Tilée (creuse une clairière ou coupe une route en refermant proprement tous les angles voisins !)'
+                          : 'Auto-Tiled Eraser Mode (carves clearings while automatically healing all surrounding corners!)'}
+                      </span>
+                    </label>
+                  </div>
+                )}
+
+                {(tool === 'brush' || tool === 'eraser') && (
                   <div className="flex flex-wrap items-center gap-4">
                     <div className="flex items-center gap-1.5">
                       <span className="text-xs text-slate-400 whitespace-nowrap">
@@ -1385,7 +1390,7 @@ export function MapsAtlasView({
                         [
                           { l: 0, fr: 'L0 Sol', en: 'L0 Ground' },
                           { l: 1, fr: 'L1 Tapis / Ponts', en: 'L1 Floor / Deck' },
-                          { l: 2, fr: 'L2 Murs / Troncs', en: 'L2 Walls / Props' },
+                          { l: 2, fr: 'L2 Murs / Forêt', en: 'L2 Walls / Forest' },
                           { l: 3, fr: 'L3 Canopée / Hauts', en: 'L3 Canopy / Tops' },
                         ] as const
                       ).map((item) => (
@@ -1421,15 +1426,6 @@ export function MapsAtlasView({
                           }
                           className="w-20 px-2.5 py-1 text-xs font-mono tabular-nums rounded bg-slate-900 border border-slate-700 text-amber-300"
                         />
-                        <span className="text-xs text-slate-400 tabular-nums">
-                          {maskOverlays.has(selectedTileId)
-                            ? lang === 'fr'
-                              ? 'Collision active'
-                              : 'Solid mask'
-                            : lang === 'fr'
-                            ? 'Praticable'
-                            : 'Walkable'}
-                        </span>
                       </div>
                     )}
 
@@ -1450,18 +1446,138 @@ export function MapsAtlasView({
                     )}
                   </div>
                 )}
+
+                {/* Row 3: VISUAL PALETTE CLASSIFIED BY THEME (showing exact shape of every item!) */}
+                <div className="p-3.5 rounded-lg bg-[#0d121b] border border-slate-800 space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-xs font-semibold text-white">
+                      {lang === 'fr'
+                        ? 'Palette visuelle classée par thème (cliquez sur une forme pour la sélectionner) :'
+                        : 'Thematic Visual Shape Palette (click any tile or prefab shape):'}
+                    </span>
+                    <div className="flex flex-wrap items-center gap-1">
+                      {EDITOR_THEMES.map((th) => (
+                        <button
+                          key={th.id}
+                          type="button"
+                          onClick={() => setActiveTheme(th.id)}
+                          className={`px-2.5 py-1 text-xs font-medium rounded border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                            activeTheme === th.id
+                              ? 'bg-slate-800 border-amber-400 text-amber-300'
+                              : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
+                          }`}
+                        >
+                          {lang === 'fr' ? th.nameFr : th.nameEn}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2.5 max-h-[230px] overflow-y-auto pr-1">
+                    {activeTheme === 'autotile' &&
+                      AUTOTILE_BRUSHES.map((b) => {
+                        const selected =
+                          (tool === 'autotile' || tool === 'autotile_rect') &&
+                          activeAutotileZone === b.id;
+                        return (
+                          <button
+                            key={b.id}
+                            type="button"
+                            onClick={() => {
+                              setActiveAutotileZone(b.id);
+                              if (tool !== 'autotile_rect') setTool('autotile');
+                            }}
+                            className={`p-2 rounded-lg border flex flex-col items-center gap-1.5 text-center transition-colors cursor-pointer ${
+                              selected
+                                ? 'bg-amber-500/15 border-amber-400 text-amber-200'
+                                : 'bg-slate-900/80 border-slate-800 text-slate-300 hover:border-slate-600'
+                            }`}
+                          >
+                            <ShapeThumb
+                              selection={{ kind: 'autotile', zone: b.id, brush: b }}
+                              sprites={sprites}
+                              tileCols={world.tileCols}
+                              maxBoxPx={54}
+                            />
+                            <span className="text-[11px] leading-tight line-clamp-2">
+                              {lang === 'fr' ? b.nameFr : b.nameEn}
+                            </span>
+                          </button>
+                        );
+                      })}
+
+                    {PREFAB_STAMPS.filter((s) => s.theme === activeTheme).map((st) => {
+                      const selected = tool === 'stamp' && activeStamp.id === st.id;
+                      return (
+                        <button
+                          key={st.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedStampId(st.id);
+                            setTool('stamp');
+                          }}
+                          className={`p-2 rounded-lg border flex flex-col items-center gap-1.5 text-center transition-colors cursor-pointer ${
+                            selected
+                              ? 'bg-amber-500/15 border-amber-400 text-amber-200'
+                              : 'bg-slate-900/80 border-slate-800 text-slate-300 hover:border-slate-600'
+                          }`}
+                        >
+                          <ShapeThumb
+                            selection={{ kind: 'stamp', stamp: st }}
+                            sprites={sprites}
+                            tileCols={world.tileCols}
+                            maxBoxPx={54}
+                          />
+                          <span className="text-[11px] leading-tight line-clamp-2">
+                            {lang === 'fr' ? st.nameFr : st.nameEn}
+                          </span>
+                        </button>
+                      );
+                    })}
+
+                    {THEMATIC_TILES.filter((t) => t.theme === activeTheme).map((ti) => {
+                      const selected = tool === 'brush' && selectedTileId === ti.tid;
+                      return (
+                        <button
+                          key={ti.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedTileId(ti.tid);
+                            setActiveLayer(ti.recommendedLayer);
+                            setTool('brush');
+                          }}
+                          className={`p-2 rounded-lg border flex flex-col items-center gap-1.5 text-center transition-colors cursor-pointer ${
+                            selected
+                              ? 'bg-amber-500/15 border-amber-400 text-amber-200'
+                              : 'bg-slate-900/80 border-slate-800 text-slate-300 hover:border-slate-600'
+                          }`}
+                        >
+                          <ShapeThumb
+                            selection={{ kind: 'tile', item: ti }}
+                            sprites={sprites}
+                            tileCols={world.tileCols}
+                            maxBoxPx={44}
+                          />
+                          <span className="text-[11px] leading-tight line-clamp-2">
+                            {lang === 'fr' ? ti.nameFr : ti.nameEn}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             )}
 
-            {/* Scrollable Canvas Frame */}
+            {/* Scrollable Map Canvas Frame */}
             <div className="overflow-auto max-h-[640px] rounded-lg border border-slate-800 bg-[#090d14] flex justify-center p-3">
               <canvas
                 ref={canvasRef}
                 onMouseDown={handleMouseDown}
                 onMouseMove={handleMouseMove}
-                onMouseUp={handleMouseUpOrLeave}
+                onMouseUp={handleMouseUp}
                 onMouseLeave={() => {
-                  handleMouseUpOrLeave();
+                  handleMouseUp();
                   setHoverCell(null);
                 }}
                 className="pixel-canvas cursor-crosshair select-none"
@@ -1472,8 +1588,8 @@ export function MapsAtlasView({
               <span>
                 {mode === 'edit'
                   ? lang === 'fr'
-                    ? 'Éditeur actif : cliquez (ou glissez au pinceau) sur la carte. Vos modifications sont immédiatement jouables dans l’onglet Aventure.'
-                    : 'Editor active: click (or drag with brush) on the map. Edits apply immediately to the live game.'
+                    ? 'Auto-Tiling actif : tracez librement une forêt, une route, un lac ou un tapis — tous les angles externes et rentrants se raccordent automatiquement.'
+                    : 'Auto-Tiling active: paint forests, roads, water, or carpets freely — all outer and inner corners resolve automatically.'
                   : lang === 'fr'
                   ? 'Cliquez sur un passage (P1…), un PNJ, un monstre, un coffre, une stèle ou une tuile pour inspecter ses données.'
                   : 'Click any portal (P1…), NPC, monster, chest, stele, or tile to inspect its parameters.'}
@@ -1485,14 +1601,14 @@ export function MapsAtlasView({
             </div>
           </div>
 
-          {/* Tileset Picker Drawer when Brush Tool is Active */}
+          {/* Full 40-column Tileset Sheet Drawer when Single-Tile Brush is Active */}
           {mode === 'edit' && tool === 'brush' && (
             <div className="p-5 rounded-xl bg-[#141a24] border border-slate-800/90 space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h2 className="text-sm font-semibold text-white">
                   {lang === 'fr'
-                    ? 'Palette complète tileset.png (40 colonnes — cliquez pour choisir une tuile)'
-                    : 'Full tileset.png Palette (40 columns — click to pick any tile)'}
+                    ? 'Planche complète tileset.png (40 colonnes — cliquez pour choisir n’importe quelle tuile)'
+                    : 'Full tileset.png Sheet (40 columns — click to pick any raw tile)'}
                 </h2>
                 <span className="text-xs font-mono text-amber-300 tabular-nums">
                   #{selectedTileId} (col {selectedTileId % world.tileCols}, row{' '}

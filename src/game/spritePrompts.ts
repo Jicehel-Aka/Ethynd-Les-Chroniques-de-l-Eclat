@@ -104,4 +104,24 @@ export const MONSTER_PIXEL_PROMPTS: Record<string, MonsterPixelPrompt> = {
     promptEn:
       '16-bit SNES Boss pixel art sprite sheet (Final Fantasy VI / Secret of Mana style), 3/4 top-down view, 4x4 grid of 48x48 px frames (192x192 px total), transparent background, crisp 1px #090514 outline. Subject: Archlich Vorgath levitating over a dark amethyst vortex, sculpted ivory skull (#F8FAFC) with blazing gold-violet eyes (#FDE047, #F0ABFC), floating five-spired golden crown, high gothic collar and imperial purple-and-void robes (#6B21A8, #3B0764, #090514) with gilded ribcage, wielding a twin-crescent Eclipse scepter in his right hand and a levitating amethyst phylactery orb (#C084FC) in his left skeletal hand. 4 directions × 4 frames.',
   },
+  reine_caverne: {
+    id: 'reine_caverne',
+    titleFr: 'Morvath, Reine de la Caverne (Boss — Acte I)',
+    sizeSpec: '48×48 px par frame (planche Boss 192×192 px : 4 lignes × 4 frames)',
+    sheetSpecFr:
+      'Ligne 1 : Face (Bas) · Ligne 2 : Profil Gauche · Ligne 3 : Profil Droite · Ligne 4 : Dos (Haut)',
+    palette: [
+      { label: 'Chitine abyssale', hex: '#17153B' },
+      { label: 'Carapace indigo', hex: '#433D8B' },
+      { label: 'Reflet chitine', hex: '#818CF8' },
+      { label: 'Cristal améthyste', hex: '#E879F9' },
+      { label: 'Éclat de l’Aube', hex: '#FDE047' },
+      { label: 'Venin émeraude', hex: '#4ADE80' },
+    ],
+    promptFr:
+      "Sprite sheet Boss pixel art 16-bit style SNES Action-RPG (Secret of Mana / Chrono Trigger), vue top-down 3/4, grille 4x4 de 48x48 pixels par frame (total 192x192 px), fond transparent, contour net 1px #090514 sans anti-aliasing. Sujet : Morvath, Reine Arachnide géante de la Grotte Cristalline, carapace segmentée en chitine indigo et violet profond (#17153B, #2E236C, #433D8B, arêtes brillantes #818CF8), abdomen massif hérissé de pointes cristallines d'améthyste et d'éclats dorés de l'Aube (#E879F9, #FDE047), huit pattes articulées à jointures violettes en marche tétrapode alternée, céphalothorax blindé percé de six yeux chasseurs vert émeraude lumineux (#4ADE80, #DCFCE7) et de deux chélicères d'ivoire crantées perlant de venin. 4 directions distinctes (face, profil gauche, profil droite, dos) × 4 frames.",
+    promptEn:
+      '16-bit SNES Action-RPG Boss pixel art sprite sheet (Secret of Mana / Chrono Trigger style), 3/4 top-down view, 4x4 grid of 48x48 px frames (192x192 px total), transparent background, crisp 1px #090514 outline, no anti-aliasing. Subject: Morvath, Giant Crystal Cavern Broodmother Queen, segmented deep indigo-violet chitin carapace (#17153B, #433D8B, #818CF8 specular ridges), massive brood-abdomen crowned with glowing amethyst and golden Dawn-Shard crystal spires (#E879F9, #FDE047), eight articulated arachnid legs in alternating tetrapod gait, armored cephalothorax with six glowing emerald hunter eyes (#4ADE80) and serrated venom-dripping ivory chelicerae. 4 distinct directions × 4 frames.',
+  },
 };
+

@@ -6,3 +6,4 @@ coverage/
 *.log
 .env*
 !.env.example
+gamebuino_aka/SD_CARD/

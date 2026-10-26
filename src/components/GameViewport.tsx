@@ -8,7 +8,17 @@ import {
   computeDerivedStats,
   xpRequiredForLevel,
 } from '../game/content';
-import { EngineSnapshot, EthyndEngine, VIEW_H, VIEW_W } from '../game/engine';
+import { exportGamebuinoAkaPackZip } from '../game/akaExporter';
+import {
+  AKA_TILE_SHOW,
+  AKA_VIEW_H,
+  AKA_VIEW_W,
+  EngineSnapshot,
+  EthyndEngine,
+  TILE_SHOW,
+  VIEW_H,
+  VIEW_W,
+} from '../game/engine';
 import { SpriteBank } from '../game/spriteBank';
 import {
   ActiveDialogue,
@@ -61,6 +71,10 @@ export function GameViewport({
   const [readingLore, setReadingLore] = useState<{ lore: LoreEntryDef; isNew: boolean } | null>(null);
   const [muted, setMuted] = useState(audioEngine.isMuted());
   const [musicMode, setMusicMode] = useState(audioEngine.getMusicMode());
+  const [displayMode, setDisplayMode] = useState<'web' | 'aka'>('web');
+  const [akaPackNotice, setAkaPackNotice] = useState<string | null>(null);
+  const displayModeRef = useRef<'web' | 'aka'>('web');
+  displayModeRef.current = displayMode;
 
   const [snapshot, setSnapshot] = useState<EngineSnapshot>({
     skillCooldownRatio: 0,
@@ -560,8 +574,21 @@ export function GameViewport({
         if (!paused) {
           const c = canvasRef.current;
           if (c) {
+            const isAka = displayModeRef.current === 'aka';
+            const targetW = isAka ? AKA_VIEW_W : VIEW_W;
+            const targetH = isAka ? AKA_VIEW_H : VIEW_H;
+            if (c.width !== targetW) c.width = targetW;
+            if (c.height !== targetH) c.height = targetH;
             const ctx = c.getContext('2d');
-            if (ctx) eng.render(ctx);
+            if (ctx) {
+              eng.render(
+                ctx,
+                targetW,
+                targetH,
+                isAka ? AKA_TILE_SHOW : TILE_SHOW,
+                isAka
+              );
+            }
           }
           frameCount++;
           if (frameCount % 6 === 0) {
@@ -607,6 +634,24 @@ export function GameViewport({
   };
 
   const clampedShopCursor = Math.max(0, Math.min(totalShopActions - 1, shopCursor));
+
+  const handleDownloadAkaPack = () => {
+    const blob = exportGamebuinoAkaPackZip(world, sprites);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'ethynd_gamebuino_aka_pack.zip';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setAkaPackNotice(
+      lang === 'fr'
+        ? 'Pack Gamebuino AKA téléchargé (.ino + SD_CARD/ETHYND/WORLD.BIN, TILESET.565, SPRITES.565).'
+        : 'Downloaded Gamebuino AKA pack (.ino + SD_CARD/ETHYND/WORLD.BIN, TILESET.565, SPRITES.565).'
+    );
+    window.setTimeout(() => setAkaPackNotice(null), 4000);
+  };
 
   return (
     <main className="max-w-[1360px] mx-auto px-4 sm:px-6 py-5">
@@ -732,13 +777,185 @@ export function GameViewport({
       {/* Main Split Stage: Game Canvas (Left/Center) + Companion Map & Quest Column (Right) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
         <div className="lg:col-span-8 flex flex-col">
-          <div className="relative rounded-xl overflow-hidden border border-slate-800 bg-[#0a0d13] flex items-center justify-center">
-            <canvas
-              ref={canvasRef}
-              width={VIEW_W}
-              height={VIEW_H}
-              className="w-full h-auto max-h-[68vh] object-contain pixel-canvas block"
-            />
+          {/* Segmented Display Target Bar: Web HD (768x528) vs Native Gamebuino AKA (320x240 RGB565) */}
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-1 p-1 rounded-lg bg-[#141a24] border border-slate-800/90">
+              <button
+                type="button"
+                onClick={() => setDisplayMode('web')}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                  displayMode === 'web'
+                    ? 'bg-slate-800 text-amber-300'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                {lang === 'fr' ? 'Écran Web HD (768×528)' : 'Web HD Screen (768×528)'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setDisplayMode('aka')}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                  displayMode === 'aka'
+                    ? 'bg-amber-500 text-slate-950'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                {lang === 'fr' ? 'Console Gamebuino AKA (320×240)' : 'Gamebuino AKA Console (320×240)'}
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleDownloadAkaPack}
+              className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-900 border border-slate-700/80 text-slate-200 hover:border-amber-400/60 hover:text-amber-300 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+            >
+              {lang === 'fr'
+                ? 'Télécharger Version Gamebuino AKA (.zip)'
+                : 'Download Gamebuino AKA Build (.zip)'}
+            </button>
+          </div>
+
+          {akaPackNotice && (
+            <div className="mb-3 px-3.5 py-2 rounded-lg bg-slate-900 border border-amber-500/40 text-xs text-amber-200">
+              {akaPackNotice}
+            </div>
+          )}
+
+          <div
+            className={`relative rounded-xl overflow-hidden border flex items-center justify-center ${
+              displayMode === 'aka'
+                ? 'p-4 sm:p-6 bg-[#171d29] border-slate-700'
+                : 'border-slate-800 bg-[#0a0d13]'
+            }`}
+          >
+            {displayMode === 'aka' ? (
+              <div className="w-full flex flex-col xl:flex-row items-center justify-between gap-5">
+                {/* Left Handheld Wing: Tactile Cross D-Pad */}
+                <div className="hidden sm:grid grid-cols-3 gap-1.5 shrink-0 select-none">
+                  <div />
+                  <button
+                    type="button"
+                    onPointerDown={() => (modalOpen ? moveModalCursor(-1) : setVirtualKey('up', true))}
+                    onPointerUp={() => setVirtualKey('up', false)}
+                    onPointerLeave={() => setVirtualKey('up', false)}
+                    className="w-11 h-11 rounded-md bg-slate-800 hover:bg-slate-700 active:bg-amber-500 active:text-slate-950 border border-slate-700 text-xs font-bold text-slate-100 cursor-pointer"
+                  >
+                    ▲
+                  </button>
+                  <div />
+                  <button
+                    type="button"
+                    onPointerDown={() => (modalOpen ? moveModalCursor(-1) : setVirtualKey('left', true))}
+                    onPointerUp={() => setVirtualKey('left', false)}
+                    onPointerLeave={() => setVirtualKey('left', false)}
+                    className="w-11 h-11 rounded-md bg-slate-800 hover:bg-slate-700 active:bg-amber-500 active:text-slate-950 border border-slate-700 text-xs font-bold text-slate-100 cursor-pointer"
+                  >
+                    ◀
+                  </button>
+                  <div className="w-11 h-11 rounded-md bg-slate-900 border border-slate-800" />
+                  <button
+                    type="button"
+                    onPointerDown={() => (modalOpen ? moveModalCursor(1) : setVirtualKey('right', true))}
+                    onPointerUp={() => setVirtualKey('right', false)}
+                    onPointerLeave={() => setVirtualKey('right', false)}
+                    className="w-11 h-11 rounded-md bg-slate-800 hover:bg-slate-700 active:bg-amber-500 active:text-slate-950 border border-slate-700 text-xs font-bold text-slate-100 cursor-pointer"
+                  >
+                    ▶
+                  </button>
+                  <div />
+                  <button
+                    type="button"
+                    onPointerDown={() => (modalOpen ? moveModalCursor(1) : setVirtualKey('down', true))}
+                    onPointerUp={() => setVirtualKey('down', false)}
+                    onPointerLeave={() => setVirtualKey('down', false)}
+                    className="w-11 h-11 rounded-md bg-slate-800 hover:bg-slate-700 active:bg-amber-500 active:text-slate-950 border border-slate-700 text-xs font-bold text-slate-100 cursor-pointer"
+                  >
+                    ▼
+                  </button>
+                  <div />
+                </div>
+
+                {/* Authentic 320x240 RGB565 Screen Bezel (2x Integer Pixel Scale = 640x480 max) */}
+                <div className="p-3 rounded-xl bg-[#090c12] border border-slate-800 flex flex-col items-center">
+                  <canvas
+                    ref={canvasRef}
+                    width={AKA_VIEW_W}
+                    height={AKA_VIEW_H}
+                    className="w-full max-w-[640px] aspect-[4/3] h-auto object-contain pixel-canvas block rounded bg-black"
+                  />
+                  <div className="mt-2 flex items-center gap-2 text-[11px] font-mono text-slate-400 tabular-nums">
+                    <span className="text-amber-300 font-semibold">GAMEBUINO AKA</span>
+                    <span aria-hidden="true">·</span>
+                    <span>320×240 RGB565</span>
+                    <span aria-hidden="true">·</span>
+                    <span>1:1 (32px/tuile)</span>
+                  </div>
+                </div>
+
+                {/* Right Handheld Wing: Tactile A / B / X / Y + MENU Buttons */}
+                <div className="hidden sm:flex flex-col items-center gap-3 shrink-0 select-none">
+                  <div className="grid grid-cols-3 gap-1.5">
+                    <div />
+                    <button
+                      type="button"
+                      onClick={() => engineRef.current?.useQuickPotion()}
+                      title={lang === 'fr' ? 'Bouton Y : Potion rapide' : 'Y Button: Quick Potion'}
+                      className="w-11 h-11 rounded-lg bg-emerald-500/20 border border-emerald-400/50 hover:bg-emerald-500/30 text-xs font-bold text-emerald-200 cursor-pointer"
+                    >
+                      Y
+                    </button>
+                    <div />
+                    <button
+                      type="button"
+                      onPointerDown={() => setVirtualKey('skill', true)}
+                      onPointerUp={() => setVirtualKey('skill', false)}
+                      onPointerLeave={() => setVirtualKey('skill', false)}
+                      title={lang === 'fr' ? 'Bouton X : Onde prismatique' : 'X Button: Arcane Wave'}
+                      className="w-11 h-11 rounded-lg bg-sky-500/20 border border-sky-400/50 hover:bg-sky-500/30 text-xs font-bold text-sky-200 cursor-pointer"
+                    >
+                      X
+                    </button>
+                    <div className="w-11 h-11" />
+                    <button
+                      type="button"
+                      onPointerDown={() => (modalOpen ? confirmActiveModal() : setVirtualKey('attack', true))}
+                      onPointerUp={() => setVirtualKey('attack', false)}
+                      onPointerLeave={() => setVirtualKey('attack', false)}
+                      title={lang === 'fr' ? 'Bouton A : Épée & Action' : 'A Button: Sword & Confirm'}
+                      className="w-11 h-11 rounded-lg bg-amber-500 hover:bg-amber-400 text-xs font-bold text-slate-950 cursor-pointer"
+                    >
+                      A
+                    </button>
+                    <div />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (modalOpen) closeActiveModal();
+                      }}
+                      title={lang === 'fr' ? 'Bouton B : Retour / Fermer' : 'B Button: Back / Close'}
+                      className="w-11 h-11 rounded-lg bg-rose-500/20 border border-rose-400/50 hover:bg-rose-500/30 text-xs font-bold text-rose-200 cursor-pointer"
+                    >
+                      B
+                    </button>
+                    <div />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onNavigateTab('equipment')}
+                    className="px-3 py-1 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 text-[11px] font-mono text-slate-300 cursor-pointer whitespace-nowrap shrink-0"
+                  >
+                    MENU
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <canvas
+                ref={canvasRef}
+                width={VIEW_W}
+                height={VIEW_H}
+                className="w-full h-auto max-h-[68vh] object-contain pixel-canvas block"
+              />
+            )}
 
             {/* Boss Health Bar Overlay (Unobtrusive Top Center) */}
             {snapshot.activeBoss && (

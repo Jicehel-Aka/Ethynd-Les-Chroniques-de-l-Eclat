@@ -30,6 +30,11 @@ export const VIEW_H = 528;
 export const TILE_LOGIC = 32;
 export const TILE_SHOW = 48; // 1.5x crisp pixel scale (16x11 tiles visible)
 
+// Native Gamebuino AKA Hardware Viewport (320x240 RGB565 TFT, 1:1 32px tiles = 10x7.5 visible tiles)
+export const AKA_VIEW_W = 320;
+export const AKA_VIEW_H = 240;
+export const AKA_TILE_SHOW = 32;
+
 interface Rect {
   x: number;
   y: number;
@@ -1193,45 +1198,57 @@ export class EthyndEngine {
     };
   }
 
-  private drawTileById(ctx: CanvasRenderingContext2D, rawTid: number, dx: number, dy: number) {
+  private drawTileById(
+    ctx: CanvasRenderingContext2D,
+    rawTid: number,
+    dx: number,
+    dy: number,
+    tileShow = TILE_SHOW
+  ) {
     if (rawTid < 0) return;
     const tid = this.currentTileDisplay.get(rawTid) ?? rawTid;
     const sx = (tid % this.world.tileCols) * 32;
     const sy = Math.floor(tid / this.world.tileCols) * 32;
-    ctx.drawImage(this.sprites.tileset, sx, sy, 32, 32, dx, dy, TILE_SHOW, TILE_SHOW);
+    ctx.drawImage(this.sprites.tileset, sx, sy, 32, 32, dx, dy, tileShow, tileShow);
   }
 
-  public render(ctx: CanvasRenderingContext2D) {
+  public render(
+    ctx: CanvasRenderingContext2D,
+    viewW = VIEW_W,
+    viewH = VIEW_H,
+    tileShow = TILE_SHOW,
+    akaRgb565 = false
+  ) {
     ctx.imageSmoothingEnabled = false;
     const [br, bg, bb] = this.currentMap.bgColor;
     ctx.fillStyle = `rgb(${br},${bg},${bb})`;
-    ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+    ctx.fillRect(0, 0, viewW, viewH);
 
-    const scale = TILE_SHOW / TILE_LOGIC; // 1.5
-    const mapPxW = this.currentMap.w * TILE_SHOW;
-    const mapPxH = this.currentMap.h * TILE_SHOW;
+    const scale = tileShow / TILE_LOGIC; // 1.5 on Web HD, 1.0 exact 1:1 on Gamebuino AKA 320x240
+    const mapPxW = this.currentMap.w * tileShow;
+    const mapPxH = this.currentMap.h * tileShow;
 
     // Smooth clamped camera (centers small interiors like maison/forge, clamps smoothly on large maps)
-    let ox = Math.round(VIEW_W / 2 - this.progress.wx * scale);
-    let oy = Math.round(VIEW_H / 2 - this.progress.wy * scale);
-    if (mapPxW <= VIEW_W) {
-      ox = Math.round((VIEW_W - mapPxW) / 2);
+    let ox = Math.round(viewW / 2 - this.progress.wx * scale);
+    let oy = Math.round(viewH / 2 - this.progress.wy * scale);
+    if (mapPxW <= viewW) {
+      ox = Math.round((viewW - mapPxW) / 2);
     } else {
-      ox = Math.min(0, Math.max(VIEW_W - mapPxW, ox));
+      ox = Math.min(0, Math.max(viewW - mapPxW, ox));
     }
-    if (mapPxH <= VIEW_H) {
-      oy = Math.round((VIEW_H - mapPxH) / 2);
+    if (mapPxH <= viewH) {
+      oy = Math.round((viewH - mapPxH) / 2);
     } else {
-      oy = Math.min(0, Math.max(VIEW_H - mapPxH, oy));
+      oy = Math.min(0, Math.max(viewH - mapPxH, oy));
     }
 
     const toScreenX = (wx: number) => Math.round(ox + wx * scale);
     const toScreenY = (wy: number) => Math.round(oy + wy * scale);
 
-    const tx0 = Math.max(0, Math.floor(-ox / TILE_SHOW));
-    const tx1 = Math.min(this.currentMap.w - 1, Math.floor((VIEW_W - ox) / TILE_SHOW));
-    const ty0 = Math.max(0, Math.floor(-oy / TILE_SHOW));
-    const ty1 = Math.min(this.currentMap.h - 1, Math.floor((VIEW_H - oy) / TILE_SHOW));
+    const tx0 = Math.max(0, Math.floor(-ox / tileShow));
+    const tx1 = Math.min(this.currentMap.w - 1, Math.floor((viewW - ox) / tileShow));
+    const ty0 = Math.max(0, Math.floor(-oy / tileShow));
+    const ty1 = Math.min(this.currentMap.h - 1, Math.floor((viewH - oy) / tileShow));
 
     const nowMs = performance.now();
     const pulse = Math.sin(nowMs * 0.005);
@@ -1239,25 +1256,29 @@ export class EthyndEngine {
 
     // Background Layers 0..2 + Controlled Stone-Pot Braziers (2573) & Standing Royal Torches (2576)
     for (let ty = ty0; ty <= ty1; ty++) {
-      const dy = oy + ty * TILE_SHOW;
+      const dy = oy + ty * tileShow;
       for (let tx = tx0; tx <= tx1; tx++) {
-        const dx = ox + tx * TILE_SHOW;
+        const dx = ox + tx * tileShow;
         for (let l = 0; l <= 2; l++) {
           const tid = this.currentMap.layers[l][ty][tx];
           if (tid < 0) continue;
           if (tid === 2576) {
-            // Wrought-iron & gilded brass standing castle torch (replaces raw floor fire)
             const torchSpr = this.sprites.torchStand[fireFrame];
             if (torchSpr) {
-              ctx.drawImage(torchSpr, dx, dy - 12, TILE_SHOW, Math.round(TILE_SHOW * 1.25));
+              ctx.drawImage(
+                torchSpr,
+                dx,
+                dy - Math.round(8 * scale),
+                tileShow,
+                Math.round(tileShow * 1.25)
+              );
             }
           } else {
-            this.drawTileById(ctx, tid, dx, dy);
+            this.drawTileById(ctx, tid, dx, dy, tileShow);
             if (tid === 2573) {
-              // Controlled flame burning inside the mouth of stone pot 2573
               const flameSpr = this.sprites.brazierFlame[fireFrame];
               if (flameSpr) {
-                ctx.drawImage(flameSpr, dx, dy, TILE_SHOW, TILE_SHOW);
+                ctx.drawImage(flameSpr, dx, dy, tileShow, tileShow);
               }
             }
           }
@@ -1265,52 +1286,62 @@ export class EthyndEngine {
       }
     }
 
-    // Complete 2-tile Treasure Chests (2569+2570 closed, 2571+2572 open -> 40x32 logical = 60x48 screen)
+    // Complete 2-tile Treasure Chests (40x32 logical -> 60x48 Web HD / 40x32 Gamebuino AKA)
+    const chestW = Math.round(40 * scale);
+    const chestH = Math.round(32 * scale);
+    const chestOffX = Math.round(4 * scale);
     for (const c of this.currentMap.chests) {
       const opened = Boolean(this.progress.openedChests[c.id]);
       const chestSpr = opened ? this.sprites.chestOpen : this.sprites.chestClosed;
-      ctx.drawImage(chestSpr, toScreenX(c.x) - 6, toScreenY(c.y), 60, 48);
+      ctx.drawImage(chestSpr, toScreenX(c.x) - chestOffX, toScreenY(c.y), chestW, chestH);
     }
 
     // Lore Steles / Grimoires
     for (const st of this.currentMap.steles) {
       const sx = toScreenX(st.x);
       const sy = toScreenY(st.y);
-      this.drawTileById(ctx, st.tile, sx, sy);
+      this.drawTileById(ctx, st.tile, sx, sy, tileShow);
       if (!this.progress.unlockedLore[st.id]) {
         ctx.save();
         ctx.strokeStyle = `rgba(251, 191, 36, ${0.45 + 0.35 * Math.abs(pulse)})`;
-        ctx.lineWidth = 2;
-        ctx.strokeRect(sx + 4, sy + 4, TILE_SHOW - 8, TILE_SHOW - 8);
+        ctx.lineWidth = Math.max(1.5, scale * 1.3);
+        const pad = Math.round(3 * scale);
+        ctx.strokeRect(sx + pad, sy + pad, tileShow - pad * 2, tileShow - pad * 2);
         ctx.restore();
       }
     }
 
     // Map Items
-    const bob = Math.round(pulse * 3);
+    const bob = Math.round(pulse * 2 * scale);
+    const itemSz = Math.round(24 * scale);
+    const itemPad = Math.round(4 * scale);
     this.currentMap.items.forEach((it, idx) => {
       const key = `${this.currentMap.name}:${idx}:${it.id}`;
       if (this.progress.takenMapItems[key]) return;
       if (it.afterFlag && !this.progress.flags[it.afterFlag]) return;
       const icon = this.sprites.items[it.id] || this.sprites.items.potion;
-      ctx.drawImage(icon, toScreenX(it.x) + 6, toScreenY(it.y) + 6 + bob, 36, 36);
+      ctx.drawImage(icon, toScreenX(it.x) + itemPad, toScreenY(it.y) + itemPad + bob, itemSz, itemSz);
     });
 
     // Bespoke Gilded Royal Throne on Chateau Dais (drawn behind King Edward IV!)
     if (this.currentMap.name === 'chateau' && this.sprites.throne) {
-      ctx.drawImage(this.sprites.throne, toScreenX(552), toScreenY(80), 72, 72);
+      const thrSz = Math.round(48 * scale);
+      ctx.drawImage(this.sprites.throne, toScreenX(552), toScreenY(80), thrSz, thrSz);
     }
 
     // NPCs (blockade guards depart completely once their road is unlocked)
+    const npcW = Math.round(32 * scale);
+    const npcH = Math.round(36 * scale);
+    const npcOffY = Math.round(3 * scale);
     for (const n of this.currentMap.npcs) {
       if (!isNpcPresent(this.progress, n)) continue;
       const pos = this.getNpcPos(n);
       const set = this.sprites.npcs[n.type] || this.sprites.npcs.sage;
       const spr = set[n.dir] || set[Direction.Bas];
-      ctx.drawImage(spr, toScreenX(pos.x), toScreenY(pos.y) - 4, 48, 54);
+      ctx.drawImage(spr, toScreenX(pos.x), toScreenY(pos.y) - npcOffY, npcW, npcH);
     }
 
-    // Monsters
+    // Monsters & Bosses (including 48x48 4-directional Morvath!)
     for (const m of this.monsters) {
       if (m.hp <= 0) continue;
       const anim = this.sprites.monsters[m.type];
@@ -1330,15 +1361,14 @@ export class EthyndEngine {
       ctx.drawImage(spr, mx, my, drawSz, drawSz);
       ctx.restore();
 
-      // Overhead Monster Health Bar (for damaged non-passive monsters)
       if (m.ai !== 'passive' && m.hp < m.maxHp && m.ai !== 'boss') {
-        const bw = Math.max(36, drawSz);
+        const bw = Math.max(Math.round(24 * scale), drawSz);
         const bx = mx + Math.round((drawSz - bw) / 2);
-        const by = my - 8;
+        const by = my - Math.round(6 * scale);
         ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
-        ctx.fillRect(bx - 1, by - 1, bw + 2, 6);
+        ctx.fillRect(bx - 1, by - 1, bw + 2, 5);
         ctx.fillStyle = '#ef4444';
-        ctx.fillRect(bx, by, Math.round((bw * m.hp) / m.maxHp), 4);
+        ctx.fillRect(bx, by, Math.round((bw * m.hp) / m.maxHp), 3);
       }
     }
 
@@ -1348,19 +1378,18 @@ export class EthyndEngine {
       ? this.sprites.player.attack![this.progress.dir]
       : this.sprites.player.walk[this.progress.dir];
     const pSprite = pFrames[this.moving || this.attacking ? this.animFrame % pFrames.length : 0];
-    const pDrawSize = Math.round(64 * scale); // 96x96
+    const pDrawSize = Math.round(64 * scale); // 96x96 Web HD / 64x64 AKA
     const pxScreen = toScreenX(this.progress.wx);
-    const pyScreen = toScreenY(this.progress.wy) - 18;
+    const pyScreen = toScreenY(this.progress.wy) - Math.round(12 * scale);
 
     if (this.hurtImmunity === 0 || (this.hurtImmunity & 2) === 0) {
       ctx.drawImage(pSprite, pxScreen - pDrawSize / 2, pyScreen - pDrawSize / 2, pDrawSize, pDrawSize);
     }
 
-    // Weapon Slash Arc visual during sword swing
     if (this.attacking) {
       ctx.save();
       ctx.strokeStyle = stats.slashColor;
-      ctx.lineWidth = 4;
+      ctx.lineWidth = Math.max(2, Math.round(2.7 * scale));
       ctx.globalAlpha = 0.78;
       let startAng = 0;
       if (this.progress.dir === Direction.Bas) startAng = 0.2 * Math.PI;
@@ -1368,7 +1397,7 @@ export class EthyndEngine {
       else if (this.progress.dir === Direction.Gauche) startAng = 0.7 * Math.PI;
       else startAng = -0.3 * Math.PI;
       ctx.beginPath();
-      ctx.arc(pxScreen, pyScreen + 8, 36, startAng, startAng + 0.65 * Math.PI);
+      ctx.arc(pxScreen, pyScreen + Math.round(5 * scale), Math.round(24 * scale), startAng, startAng + 0.65 * Math.PI);
       ctx.stroke();
       ctx.restore();
     }
@@ -1381,7 +1410,7 @@ export class EthyndEngine {
       if (pr.fromPlayer) {
         ctx.strokeStyle = pr.color;
         ctx.fillStyle = 'rgba(253, 224, 71, 0.24)';
-        ctx.lineWidth = 4;
+        ctx.lineWidth = Math.max(2, Math.round(2.6 * scale));
         ctx.beginPath();
         ctx.arc(sx, sy, pr.radius * scale * 0.85, 0, Math.PI * 2);
         ctx.fill();
@@ -1393,7 +1422,7 @@ export class EthyndEngine {
         ctx.fill();
         ctx.fillStyle = '#ffffff';
         ctx.beginPath();
-        ctx.arc(sx - 2, sy - 2, pr.radius * scale * 0.4, 0, Math.PI * 2);
+        ctx.arc(sx - 1, sy - 1, pr.radius * scale * 0.4, 0, Math.PI * 2);
         ctx.fill();
       }
       ctx.restore();
@@ -1401,10 +1430,10 @@ export class EthyndEngine {
 
     // Foreground Layer 3
     for (let ty = ty0; ty <= ty1; ty++) {
-      const dy = oy + ty * TILE_SHOW;
+      const dy = oy + ty * tileShow;
       for (let tx = tx0; tx <= tx1; tx++) {
         const tid = this.currentMap.layers[3][ty][tx];
-        if (tid >= 0) this.drawTileById(ctx, tid, ox + tx * TILE_SHOW, dy);
+        if (tid >= 0) this.drawTileById(ctx, tid, ox + tx * tileShow, dy, tileShow);
       }
     }
 
@@ -1413,27 +1442,30 @@ export class EthyndEngine {
     if (target) {
       let tx = 0;
       let ty = 0;
+      const halfSpr = Math.round(16 * scale);
       if (target.kind === 'npc') {
         const pos = this.getNpcPos(target.npc);
-        tx = toScreenX(pos.x) + 24;
-        ty = toScreenY(pos.y) - 14;
+        tx = toScreenX(pos.x) + halfSpr;
+        ty = toScreenY(pos.y) - Math.round(9 * scale);
       } else if (target.kind === 'chest') {
-        tx = toScreenX(target.chest.x) + 24;
-        ty = toScreenY(target.chest.y) - 10;
+        tx = toScreenX(target.chest.x) + halfSpr;
+        ty = toScreenY(target.chest.y) - Math.round(7 * scale);
       } else {
-        tx = toScreenX(target.stele.x) + 24;
-        ty = toScreenY(target.stele.y) - 10;
+        tx = toScreenX(target.stele.x) + halfSpr;
+        ty = toScreenY(target.stele.y) - Math.round(7 * scale);
       }
+      const bw = Math.round(16 * scale);
+      const bh = Math.round(14 * scale);
       ctx.fillStyle = '#f59e0b';
-      ctx.fillRect(tx - 12, ty - 18, 24, 20);
+      ctx.fillRect(tx - bw / 2, ty - bh, bw, bh);
       ctx.fillStyle = '#0f172a';
-      ctx.font = '700 12px "JetBrains Mono", monospace';
+      ctx.font = `700 ${Math.max(9, Math.round(8 * scale))}px "JetBrains Mono", monospace`;
       ctx.textAlign = 'center';
-      ctx.fillText('A', tx, ty - 4);
+      ctx.fillText('A', tx, ty - Math.max(2, Math.round(3 * scale)));
     }
 
     // Floating Damage / XP Popups
-    ctx.font = '700 13px "JetBrains Mono", monospace';
+    ctx.font = `700 ${Math.max(10, Math.round(9 * scale))}px "JetBrains Mono", monospace`;
     ctx.textAlign = 'center';
     for (const pop of this.popups) {
       const sx = toScreenX(pop.wx);
@@ -1442,6 +1474,18 @@ export class EthyndEngine {
       ctx.fillText(pop.text, sx + 1, sy + 1);
       ctx.fillStyle = pop.color;
       ctx.fillText(pop.text, sx, sy);
+    }
+
+    // Optional authentic 16-bit RGB565 quantization for Gamebuino AKA hardware preview
+    if (akaRgb565) {
+      const img = ctx.getImageData(0, 0, viewW, viewH);
+      const d = img.data;
+      for (let i = 0; i < d.length; i += 4) {
+        d[i] = d[i] & 0xf8;
+        d[i + 1] = d[i + 1] & 0xfc;
+        d[i + 2] = d[i + 2] & 0xf8;
+      }
+      ctx.putImageData(img, 0, 0);
     }
   }
 
