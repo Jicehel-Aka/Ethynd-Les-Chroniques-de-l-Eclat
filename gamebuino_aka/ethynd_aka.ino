@@ -218,19 +218,19 @@ static bool loadMapByIndex(uint16_t mapIdx) {
   }
 
   worldFile.read((uint8_t*)&curDoorCount, 2);
-  curDoorCount = min<uint16_t>(curDoorCount, 12);
+  if (curDoorCount > 12) curDoorCount = 12;
   worldFile.read((uint8_t*)curDoors, curDoorCount * sizeof(AkaDoorDef));
 
   worldFile.read((uint8_t*)&curChestCount, 2);
-  curChestCount = min<uint16_t>(curChestCount, 16);
+  if (curChestCount > 16) curChestCount = 16;
   worldFile.read((uint8_t*)curChests, curChestCount * sizeof(AkaChestDef));
 
   worldFile.read((uint8_t*)&curNpcCount, 2);
-  curNpcCount = min<uint16_t>(curNpcCount, 16);
+  if (curNpcCount > 16) curNpcCount = 16;
   worldFile.read((uint8_t*)curNpcs, curNpcCount * sizeof(AkaNpcDef));
 
   worldFile.read((uint8_t*)&curSpawnCount, 2);
-  curSpawnCount = min<uint16_t>(curSpawnCount, 32);
+  if (curSpawnCount > 32) curSpawnCount = 32;
   worldFile.read((uint8_t*)curSpawns, curSpawnCount * sizeof(AkaSpawnDef));
 
   for (uint16_t i = 0; i < curSpawnCount; i++) {
@@ -405,7 +405,8 @@ static void updateGameTick(uint16_t btns) {
   // Potion rapide [Bouton Y]
   if ((btns & AKA_BTN_Y) && playerState.potions > 0 && playerState.hp < playerState.maxHp) {
     playerState.potions--;
-    playerState.hp = min<uint16_t>(playerState.maxHp, playerState.hp + 45);
+    uint16_t healed = playerState.hp + 45;
+    playerState.hp = (healed > playerState.maxHp) ? playerState.maxHp : healed;
     bannerToast = "+45 PV (Potion)";
     bannerTicks = 30;
   }
@@ -511,7 +512,8 @@ static void renderAkaFrame() {
 
   // Barre HUD compacte Gamebuino AKA en haut de l'écran (320×14 px)
   fillRect565(0, 0, AKA_SCREEN_W, 14, 0x0862);
-  int hpBarW = (int)((uint32_t)playerState.hp * 80u / max<uint16_t>(1, playerState.maxHp));
+  uint16_t denomHp = (playerState.maxHp > 0) ? playerState.maxHp : 1;
+  int hpBarW = (int)(((uint32_t)playerState.hp * 80u) / denomHp);
   fillRect565(6, 3, 80, 8, 0x2124);
   fillRect565(6, 3, hpBarW, 8, 0x2668);
 

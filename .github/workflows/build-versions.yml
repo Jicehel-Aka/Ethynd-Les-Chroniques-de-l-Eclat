@@ -45,16 +45,28 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Récupération du dépôt
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
-      - name: Configuration de Node.js 22
-        uses: actions/setup-node@v4
+      - name: Configuration de Node.js 24
+        uses: actions/setup-node@v6
         with:
-          node-version: "22"
-          cache: "npm"
+          node-version: "24"
+
+      - name: Cache npm
+        uses: actions/cache@v6
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-${{ hashFiles('package.json', 'package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-
 
       - name: Installation des dépendances
-        run: npm ci
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci --legacy-peer-deps || npm install --legacy-peer-deps --no-audit --no-fund
+          else
+            npm install --legacy-peer-deps --no-audit --no-fund
+          fi
 
       - name: Vérification du typage TypeScript
         run: npm run lint
@@ -69,22 +81,34 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Récupération du dépôt
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
-      - name: Configuration de Node.js 22
-        uses: actions/setup-node@v4
+      - name: Configuration de Node.js 24
+        uses: actions/setup-node@v6
         with:
-          node-version: "22"
-          cache: "npm"
+          node-version: "24"
+
+      - name: Cache npm
+        uses: actions/cache@v6
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-${{ hashFiles('package.json', 'package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-
 
       - name: Installation des dépendances
-        run: npm ci
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci --legacy-peer-deps || npm install --legacy-peer-deps --no-audit --no-fund
+          else
+            npm install --legacy-peer-deps --no-audit --no-fund
+          fi
 
       - name: Génération de simulation_ethynd.html & editeur_niveaux.html
         run: npm run build:html
 
       - name: Publication de l'artefact — Jeu HTML5 Autonome (FR & EN)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ethynd-1-jeu-html-autonome
           path: |
@@ -94,7 +118,7 @@ jobs:
           retention-days: 30
 
       - name: Publication de l'artefact — Éditeur de Niveaux HTML5 Autonome
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ethynd-2-editeur-niveaux-html
           path: release-builds/html-autonome/editeur_niveaux.html
@@ -102,7 +126,7 @@ jobs:
           retention-days: 30
 
       - name: Publication de l'archive groupée HTML5 (.zip)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ethynd-html-pack-zip
           path: release-builds/ethynd-html-autonome-pack.zip
@@ -116,21 +140,28 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Récupération du dépôt
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
-      - name: Configuration de Node.js 22
-        uses: actions/setup-node@v4
+      - name: Configuration de Node.js 24
+        uses: actions/setup-node@v6
         with:
-          node-version: "22"
-          cache: "npm"
+          node-version: "24"
 
-      - name: Configuration de Python 3.11
-        uses: actions/setup-python@v5
+      - name: Cache npm
+        uses: actions/cache@v6
         with:
-          python-version: "3.11"
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-${{ hashFiles('package.json', 'package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-
 
-      - name: Cache PlatformIO ( Chaîne de compilation ESP32-S3 )
-        uses: actions/cache@v4
+      - name: Configuration de Python 3.12
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Cache PlatformIO (Chaîne de compilation ESP32-S3)
+        uses: actions/cache@v6
         with:
           path: ~/.platformio
           key: ${{ runner.os }}-pio-aka-${{ hashFiles('gamebuino_aka/platformio.ini') }}
@@ -138,22 +169,27 @@ jobs:
             ${{ runner.os }}-pio-aka-
 
       - name: Installation de PlatformIO Core
-        run: pip install --upgrade platformio
+        run: python -m pip install --upgrade pip platformio
 
       - name: Compilation du Firmware natif ESP32-S3 (Gamebuino AKA)
         run: pio run -d gamebuino_aka
 
       - name: Vérification de l'outil Python autonome pack_aka_sd.py
-        run: python3 gamebuino_aka/tools/pack_aka_sd.py
+        run: python gamebuino_aka/tools/pack_aka_sd.py
 
       - name: Installation des dépendances Node.js
-        run: npm ci
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci --legacy-peer-deps || npm install --legacy-peer-deps --no-audit --no-fund
+          else
+            npm install --legacy-peer-deps --no-audit --no-fund
+          fi
 
       - name: Assemblage du Pack Complet Gamebuino AKA (WORLD.BIN + TILESET.565 + SPRITES.565 + firmware.bin)
         run: npm run build:aka
 
       - name: Publication de l'artefact — Pack Console Gamebuino AKA Complet
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ethynd-3-console-gamebuino-aka
           path: |
@@ -170,22 +206,34 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Récupération du dépôt
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
-      - name: Configuration de Node.js 22
-        uses: actions/setup-node@v4
+      - name: Configuration de Node.js 24
+        uses: actions/setup-node@v6
         with:
-          node-version: "22"
-          cache: "npm"
+          node-version: "24"
+
+      - name: Cache npm
+        uses: actions/cache@v6
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-${{ hashFiles('package.json', 'package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-
 
       - name: Installation des dépendances
-        run: npm ci
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci --legacy-peer-deps || npm install --legacy-peer-deps --no-audit --no-fund
+          else
+            npm install --legacy-peer-deps --no-audit --no-fund
+          fi
 
       - name: Compilation de l'Application Web SPA + ressources téléchargeables
         run: npm run build:all
 
       - name: Publication de l'artefact — Application Web Complète (.zip)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ethynd-4-application-web-spa
           path: |
@@ -206,7 +254,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Téléchargement de tous les artefacts générés
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: collected-artifacts
 
@@ -242,7 +290,7 @@ jobs:
 
       - name: Publication de la GitHub Release officielle
         if: ${{ startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.publish_release == true) }}
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.rel_meta.outputs.tag_name }}
           name: "Ethynd : Les Chroniques de l'Éclat — ${{ steps.rel_meta.outputs.tag_name }}"

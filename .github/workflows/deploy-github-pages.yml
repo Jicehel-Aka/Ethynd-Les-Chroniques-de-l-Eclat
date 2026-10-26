@@ -21,19 +21,31 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Récupération du dépôt
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
-      - name: Configuration de Node.js 22
-        uses: actions/setup-node@v4
+      - name: Configuration de Node.js 24
+        uses: actions/setup-node@v6
         with:
-          node-version: "22"
-          cache: "npm"
+          node-version: "24"
+
+      - name: Cache npm
+        uses: actions/cache@v6
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-${{ hashFiles('package.json', 'package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-
 
       - name: Configuration de GitHub Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
 
       - name: Installation des dépendances
-        run: npm ci
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci --legacy-peer-deps || npm install --legacy-peer-deps --no-audit --no-fund
+          else
+            npm install --legacy-peer-deps --no-audit --no-fund
+          fi
 
       - name: Vérification TypeScript & Compilation complète de toutes les éditions
         env:
@@ -43,7 +55,7 @@ jobs:
           npx tsx scripts/build-editions.ts --target=all --sync-public-editor
 
       - name: Téléversement de l'artefact GitHub Pages
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: ./dist
 
@@ -57,4 +69,4 @@ jobs:
     steps:
       - name: Déploiement vers GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
